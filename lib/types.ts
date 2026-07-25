@@ -78,3 +78,22 @@ export type Contrato = {
   data_renovacao: string | null;
   observacoes: string | null;
 };
+
+export type EscalaHorario = {
+  id: string;
+  unidade_id: string;
+  ordem: number;
+  horario: string;
+  professor1: string;
+  professor2: string;
+};
+
+export type CalendarioDia = {
+  id: string;
+  unidade_id: string;
+  ordem: number;
+  dia: string;
+  sabado_feriado: string;
+  professor1: string;
+  professor2: string;
+};
