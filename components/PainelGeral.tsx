@@ -100,14 +100,14 @@ export default function PainelGeral({
           Todas as unidades
         </button>
         {unidades.map((u) => (
-          <button
+          <a
             key={u.id}
-            onClick={() => setFiltroUnidade(u.id)}
+            href={`/unidade/${u.id}`}
             className="status-pill"
-            style={{ background: filtroUnidade === u.id ? "#ff6a00" : "#1f2024", color: filtroUnidade === u.id ? "#0d0d0d" : "#f2f2f0" }}
+            style={{ background: "#1f2024", color: "#f2f2f0", textDecoration: "none", display: "inline-block" }}
           >
             {u.nome}
-          </button>
+          </a>
         ))}
       </div>
 
