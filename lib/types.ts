@@ -96,4 +96,6 @@ export type CalendarioDia = {
   sabado_feriado: string;
   professor1: string;
   professor2: string;
+  cor_dia: string;
+  cor_feriado: string;
 };
