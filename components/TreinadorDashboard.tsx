@@ -101,6 +101,45 @@ export default function TreinadorDashboard({
   const [fHorario, setFHorario] = useState("06:00");
   const [salvando, setSalvando] = useState(false);
 
+  // ---- One-on-One: respostas por tópico + exclusão ----
+  const [respostaDrafts, setRespostaDrafts] = useState<Record<string, string>>({});
+  const [salvandoResposta, setSalvandoResposta] = useState<string | null>(null);
+  const [apagandoId, setApagandoId] = useState<string | null>(null);
+
+  function getResposta(item: OneOnOne) {
+    return respostaDrafts[item.id] !== undefined ? respostaDrafts[item.id] : item.observacoes || "";
+  }
+
+  async function salvarResposta(item: OneOnOne) {
+    const texto = getResposta(item);
+    setSalvandoResposta(item.id);
+    try {
+      const { error } = await supabase.from("one_on_ones").update({ observacoes: texto || null }).eq("id", item.id);
+      if (!error) {
+        setListaOneOnOnes((p) => p.map((x) => (x.id === item.id ? { ...x, observacoes: texto || null } : x)));
+      }
+    } finally {
+      setSalvandoResposta(null);
+    }
+  }
+
+  async function apagarOneOnOne(item: OneOnOne) {
+    if (!confirm("Apagar este one-on-one?")) return;
+    setApagandoId(item.id);
+    try {
+      const { error } = await supabase.from("one_on_ones").delete().eq("id", item.id);
+      if (!error) {
+        setListaOneOnOnes((p) => p.filter((x) => x.id !== item.id));
+        setRespostaDrafts((p) => {
+          const { [item.id]: _omit, ...rest } = p;
+          return rest;
+        });
+      }
+    } finally {
+      setApagandoId(null);
+    }
+  }
+
   function abrirModal() {
     setFData(hoje);
     setFTexto1("");
@@ -237,10 +276,56 @@ export default function TreinadorDashboard({
 
       <div className="card" style={{ padding: 18 }}>
         {aba === "One-on-One" && (
-          <Lista
-            vazio="Nenhum one-on-one registrado ainda."
-            itens={listaOneOnOnes.map((o) => ({ id: o.id, titulo: fmtDate(o.data), corpo: o.topicos || o.observacoes || "" }))}
-          />
+          listaOneOnOnes.length === 0 ? (
+            <p style={{ color: "#9a9a9f", textAlign: "center", padding: 20 }}>Nenhum one-on-one registrado ainda.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              {listaOneOnOnes.map((o, i) => (
+                <div
+                  key={o.id}
+                  style={{
+                    paddingBottom: 18,
+                    borderBottom: i < listaOneOnOnes.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <div>
+                      <div className="font-bold">{fmtDate(o.data)}</div>
+                      {o.topicos && (
+                        <div style={{ color: "#9a9a9f", fontSize: 13, marginTop: 2, whiteSpace: "pre-wrap" }}>{o.topicos}</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => apagarOneOnOne(o)}
+                      disabled={apagandoId === o.id}
+                      title="Apagar"
+                      style={{ color: "#ff5a5a", background: "transparent", border: "none", fontSize: 18, cursor: "pointer", padding: 4, lineHeight: 1 }}
+                    >
+                      🗑
+                    </button>
+                  </div>
+
+                  <div style={{ marginTop: 10 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#9a9a9f", marginBottom: 4 }}>Resposta</label>
+                    <textarea
+                      value={getResposta(o)}
+                      onChange={(e) => setRespostaDrafts((p) => ({ ...p, [o.id]: e.target.value }))}
+                      style={{ ...inputStyle, minHeight: 60 }}
+                      placeholder="Escreva aqui a resposta / execução deste tópico..."
+                    />
+                    <button
+                      onClick={() => salvarResposta(o)}
+                      disabled={salvandoResposta === o.id}
+                      className="font-bold"
+                      style={{ marginTop: 6, background: "#ff6a00", color: "#0d0d0d", padding: "6px 14px", borderRadius: 8, fontSize: 13 }}
+                    >
+                      {salvandoResposta === o.id ? "Salvando..." : "Salvar resposta"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         )}
 
         {aba === "Checklist Aulas" && (
@@ -340,8 +425,7 @@ export default function TreinadorDashboard({
             {aba === "One-on-One" && (
               <>
                 <Campo label="Data"><input type="date" value={fData} onChange={(e) => setFData(e.target.value)} style={inputStyle} /></Campo>
-                <Campo label="Tópicos"><textarea value={fTexto1} onChange={(e) => setFTexto1(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} /></Campo>
-                <Campo label="Observações"><textarea value={fTexto2} onChange={(e) => setFTexto2(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} /></Campo>
+                <Campo label="Tópico"><textarea value={fTexto1} onChange={(e) => setFTexto1(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} placeholder="O que você quer tratar nesse one-on-one" /></Campo>
               </>
             )}
 
