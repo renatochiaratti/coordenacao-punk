@@ -6,6 +6,8 @@ import type {
   Treinador,
   OneOnOne,
   ChecklistItem,
+  AvaliacaoAula,
+  AvaliacaoItem,
   Scorecard,
   Curso,
   Desenvolvimento,
@@ -13,6 +15,8 @@ import type {
   Combinado,
   Contrato,
 } from "@/lib/types";
+
+const TOTAL_ITENS_AVALIACAO = 25;
 
 const DIA_LABEL: Record<string, string> = {
   segunda: "Seg", terca: "Ter", quarta: "Qua", quinta: "Qui", sexta: "Sex", sabado: "Sáb", domingo: "Dom",
@@ -60,6 +64,7 @@ export default function TreinadorDashboard({
   treinador,
   oneOnOnes,
   checklist,
+  avaliacoesAula,
   scorecards,
   cursos,
   desenvolvimento,
@@ -70,6 +75,7 @@ export default function TreinadorDashboard({
   treinador: Treinador;
   oneOnOnes: OneOnOne[];
   checklist: ChecklistItem[];
+  avaliacoesAula: AvaliacaoAula[];
   scorecards: Scorecard[];
   cursos: Curso[];
   desenvolvimento: Desenvolvimento[];
@@ -82,6 +88,7 @@ export default function TreinadorDashboard({
 
   const [listaOneOnOnes, setListaOneOnOnes] = useState(oneOnOnes);
   const [listaChecklist, setListaChecklist] = useState(checklist);
+  const [listaAvaliacoes, setListaAvaliacoes] = useState(avaliacoesAula);
   const [listaScorecards, setListaScorecards] = useState(scorecards);
   const [listaCursos, setListaCursos] = useState(cursos);
   const [listaDesenvolvimento, setListaDesenvolvimento] = useState(desenvolvimento);
@@ -137,6 +144,44 @@ export default function TreinadorDashboard({
       }
     } finally {
       setApagandoId(null);
+    }
+  }
+
+  // ---- Avaliação de aula (tabela de 25 itens) ----
+  const [showAvaliacaoModal, setShowAvaliacaoModal] = useState(false);
+  const [avaliacaoData, setAvaliacaoData] = useState(hoje);
+  const [avaliacaoItens, setAvaliacaoItens] = useState<AvaliacaoItem[]>(
+    Array.from({ length: TOTAL_ITENS_AVALIACAO }, () => ({ texto: "", ok: false }))
+  );
+  const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
+  const [avaliacaoAbertaId, setAvaliacaoAbertaId] = useState<string | null>(null);
+
+  function abrirAvaliacaoModal() {
+    setAvaliacaoData(hoje);
+    setAvaliacaoItens(Array.from({ length: TOTAL_ITENS_AVALIACAO }, () => ({ texto: "", ok: false })));
+    setShowAvaliacaoModal(true);
+  }
+
+  function atualizarTextoItemAvaliacao(idx: number, texto: string) {
+    setAvaliacaoItens((p) => p.map((it, i) => (i === idx ? { ...it, texto } : it)));
+  }
+
+  function alternarOkItemAvaliacao(idx: number) {
+    setAvaliacaoItens((p) => p.map((it, i) => (i === idx ? { ...it, ok: !it.ok } : it)));
+  }
+
+  async function salvarAvaliacao() {
+    setSalvandoAvaliacao(true);
+    try {
+      const { data, error } = await supabase
+        .from("avaliacoes_aula")
+        .insert({ treinador_id: treinador.id, data: avaliacaoData, itens: avaliacaoItens })
+        .select()
+        .single();
+      if (!error && data) setListaAvaliacoes((p) => [data as AvaliacaoAula, ...p]);
+      setShowAvaliacaoModal(false);
+    } finally {
+      setSalvandoAvaliacao(false);
     }
   }
 
@@ -329,17 +374,93 @@ export default function TreinadorDashboard({
         )}
 
         {aba === "Checklist Aulas" && (
-          <Lista
-            vazio="Nenhum item de checklist ainda."
-            itens={listaChecklist.map((c) => ({
-              id: c.id,
-              titulo: c.item,
-              corpo: fmtDate(c.data),
-              status: c.concluido ? "concluido" : "pendente",
-              statusLabel: c.concluido ? "Feito" : "Pendente",
-              onClick: () => alternarChecklist(c),
-            }))}
-          />
+          <>
+            <Lista
+              vazio="Nenhum item de checklist ainda."
+              itens={listaChecklist.map((c) => ({
+                id: c.id,
+                titulo: c.item,
+                corpo: fmtDate(c.data),
+                status: c.concluido ? "concluido" : "pendente",
+                statusLabel: c.concluido ? "Feito" : "Pendente",
+                onClick: () => alternarChecklist(c),
+              }))}
+            />
+
+            <div style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h4 className="font-extrabold">Avaliações de aula</h4>
+                <button
+                  onClick={abrirAvaliacaoModal}
+                  className="font-bold"
+                  style={{ background: "#ff6a00", color: "#0d0d0d", padding: "6px 14px", borderRadius: 8, fontSize: 13 }}
+                >
+                  + Nova avaliação
+                </button>
+              </div>
+
+              {listaAvaliacoes.length === 0 ? (
+                <p style={{ color: "#9a9a9f", textAlign: "center", padding: 14, fontSize: 13 }}>
+                  Nenhuma avaliação de aula registrada ainda.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {listaAvaliacoes.map((av) => {
+                    const preenchidos = av.itens.filter((it) => it.texto.trim() !== "");
+                    const okCount = preenchidos.filter((it) => it.ok).length;
+                    const aberta = avaliacaoAbertaId === av.id;
+                    return (
+                      <div key={av.id} style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 12 }}>
+                        <button
+                          onClick={() => setAvaliacaoAbertaId(aberta ? null : av.id)}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            width: "100%",
+                            background: "transparent",
+                            border: "none",
+                            color: "#f2f2f0",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          <span className="font-bold">Avaliação de aula — {fmtDate(av.data)}</span>
+                          <span style={{ color: "#9a9a9f", fontSize: 13 }}>{okCount}/{preenchidos.length} ok</span>
+                        </button>
+                        {aberta && (
+                          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+                            {preenchidos.length === 0 ? (
+                              <p style={{ color: "#9a9a9f", fontSize: 13 }}>Nenhum item preenchido nessa avaliação.</p>
+                            ) : (
+                              preenchidos.map((it, i) => (
+                                <div
+                                  key={i}
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    fontSize: 13,
+                                    padding: "4px 0",
+                                    borderBottom: i < preenchidos.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
+                                  }}
+                                >
+                                  <span>{it.texto}</span>
+                                  <span className="font-extrabold" style={{ color: it.ok ? "#1fbf5c" : "#e5484d" }}>
+                                    {it.ok ? "OK" : "X"}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {aba === "ScoreCard" && (
@@ -518,6 +639,68 @@ export default function TreinadorDashboard({
               style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8, marginTop: 6 }}
             >
               {salvando ? "Salvando..." : "Salvar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showAvaliacaoModal && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }}
+          onClick={() => setShowAvaliacaoModal(false)}
+        >
+          <div
+            className="card"
+            style={{ padding: 24, width: 520, maxWidth: "100%", maxHeight: "85vh", overflowY: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-extrabold" style={{ textAlign: "center" }}>Avaliação de aula</h3>
+            <div style={{ textAlign: "center", margin: "8px 0 16px" }}>
+              <input
+                type="date"
+                value={avaliacaoData}
+                onChange={(e) => setAvaliacaoData(e.target.value)}
+                style={{ ...inputStyle, width: "auto", display: "inline-block" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {avaliacaoItens.map((it, idx) => (
+                <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ width: 20, fontSize: 12, color: "#9a9a9f", flexShrink: 0 }}>{idx + 1}.</span>
+                  <input
+                    value={it.texto}
+                    onChange={(e) => atualizarTextoItemAvaliacao(idx, e.target.value)}
+                    style={{ ...inputStyle, flex: 1 }}
+                    placeholder="Item da avaliação"
+                  />
+                  <button
+                    onClick={() => alternarOkItemAvaliacao(idx)}
+                    className="font-extrabold"
+                    style={{
+                      width: 42,
+                      height: 36,
+                      flexShrink: 0,
+                      borderRadius: 8,
+                      border: "none",
+                      cursor: "pointer",
+                      background: it.ok ? "#1fbf5c" : "#e5484d",
+                      color: "#0d0d0d",
+                    }}
+                  >
+                    {it.ok ? "OK" : "X"}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={salvarAvaliacao}
+              disabled={salvandoAvaliacao}
+              className="font-bold"
+              style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8, marginTop: 16 }}
+            >
+              {salvandoAvaliacao ? "Salvando..." : "Salvar avaliação"}
             </button>
           </div>
         </div>
