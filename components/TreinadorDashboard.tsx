@@ -155,10 +155,22 @@ export default function TreinadorDashboard({
   );
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
   const [avaliacaoAbertaId, setAvaliacaoAbertaId] = useState<string | null>(null);
+  const [editandoAvaliacaoId, setEditandoAvaliacaoId] = useState<string | null>(null);
+  const [apagandoAvaliacaoId, setApagandoAvaliacaoId] = useState<string | null>(null);
 
   function abrirAvaliacaoModal() {
+    setEditandoAvaliacaoId(null);
     setAvaliacaoData(hoje);
     setAvaliacaoItens(Array.from({ length: TOTAL_ITENS_AVALIACAO }, () => ({ texto: "", ok: false })));
+    setShowAvaliacaoModal(true);
+  }
+
+  function abrirEdicaoAvaliacao(av: AvaliacaoAula) {
+    setEditandoAvaliacaoId(av.id);
+    setAvaliacaoData(av.data);
+    const itensPreenchidos = [...av.itens];
+    while (itensPreenchidos.length < TOTAL_ITENS_AVALIACAO) itensPreenchidos.push({ texto: "", ok: false });
+    setAvaliacaoItens(itensPreenchidos.slice(0, TOTAL_ITENS_AVALIACAO));
     setShowAvaliacaoModal(true);
   }
 
@@ -173,15 +185,42 @@ export default function TreinadorDashboard({
   async function salvarAvaliacao() {
     setSalvandoAvaliacao(true);
     try {
-      const { data, error } = await supabase
-        .from("avaliacoes_aula")
-        .insert({ treinador_id: treinador.id, data: avaliacaoData, itens: avaliacaoItens })
-        .select()
-        .single();
-      if (!error && data) setListaAvaliacoes((p) => [data as AvaliacaoAula, ...p]);
+      if (editandoAvaliacaoId) {
+        const { error } = await supabase
+          .from("avaliacoes_aula")
+          .update({ data: avaliacaoData, itens: avaliacaoItens })
+          .eq("id", editandoAvaliacaoId);
+        if (!error) {
+          setListaAvaliacoes((p) =>
+            p.map((x) => (x.id === editandoAvaliacaoId ? { ...x, data: avaliacaoData, itens: avaliacaoItens } : x))
+          );
+        }
+      } else {
+        const { data, error } = await supabase
+          .from("avaliacoes_aula")
+          .insert({ treinador_id: treinador.id, data: avaliacaoData, itens: avaliacaoItens })
+          .select()
+          .single();
+        if (!error && data) setListaAvaliacoes((p) => [data as AvaliacaoAula, ...p]);
+      }
       setShowAvaliacaoModal(false);
+      setEditandoAvaliacaoId(null);
     } finally {
       setSalvandoAvaliacao(false);
+    }
+  }
+
+  async function apagarAvaliacao(av: AvaliacaoAula) {
+    if (!confirm("Apagar esta avaliação de aula?")) return;
+    setApagandoAvaliacaoId(av.id);
+    try {
+      const { error } = await supabase.from("avaliacoes_aula").delete().eq("id", av.id);
+      if (!error) {
+        setListaAvaliacoes((p) => p.filter((x) => x.id !== av.id));
+        if (avaliacaoAbertaId === av.id) setAvaliacaoAbertaId(null);
+      }
+    } finally {
+      setApagandoAvaliacaoId(null);
     }
   }
 
@@ -309,15 +348,17 @@ export default function TreinadorDashboard({
         ))}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-        <button
-          onClick={abrirModal}
-          className="font-bold"
-          style={{ background: "#ff6a00", color: "#0d0d0d", padding: "8px 16px", borderRadius: 8 }}
-        >
-          + Adicionar
-        </button>
-      </div>
+      {aba !== "Checklist Aulas" && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+          <button
+            onClick={abrirModal}
+            className="font-bold"
+            style={{ background: "#ff6a00", color: "#0d0d0d", padding: "8px 16px", borderRadius: 8 }}
+          >
+            + Adicionar
+          </button>
+        </div>
+      )}
 
       <div className="card" style={{ padding: 18 }}>
         {aba === "One-on-One" && (
@@ -411,23 +452,40 @@ export default function TreinadorDashboard({
                     const aberta = avaliacaoAbertaId === av.id;
                     return (
                       <div key={av.id} style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 12 }}>
-                        <button
-                          onClick={() => setAvaliacaoAbertaId(aberta ? null : av.id)}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            width: "100%",
-                            background: "transparent",
-                            border: "none",
-                            color: "#f2f2f0",
-                            cursor: "pointer",
-                            padding: 0,
-                          }}
-                        >
-                          <span className="font-bold">Avaliação de aula — {fmtDate(av.data)}</span>
-                          <span style={{ color: "#9a9a9f", fontSize: 13 }}>{okCount}/{preenchidos.length} ok</span>
-                        </button>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                          <button
+                            onClick={() => setAvaliacaoAbertaId(aberta ? null : av.id)}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              flex: 1,
+                              background: "transparent",
+                              border: "none",
+                              color: "#f2f2f0",
+                              cursor: "pointer",
+                              padding: 0,
+                            }}
+                          >
+                            <span className="font-bold">Avaliação de aula — {fmtDate(av.data)}</span>
+                            <span style={{ color: "#9a9a9f", fontSize: 13, marginRight: 10 }}>{okCount}/{preenchidos.length} ok</span>
+                          </button>
+                          <button
+                            onClick={() => abrirEdicaoAvaliacao(av)}
+                            title="Editar"
+                            style={{ background: "transparent", border: "none", fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1 }}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => apagarAvaliacao(av)}
+                            disabled={apagandoAvaliacaoId === av.id}
+                            title="Apagar"
+                            style={{ color: "#ff5a5a", background: "transparent", border: "none", fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1 }}
+                          >
+                            🗑
+                          </button>
+                        </div>
                         {aberta && (
                           <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
                             {preenchidos.length === 0 ? (
@@ -654,7 +712,9 @@ export default function TreinadorDashboard({
             style={{ padding: 24, width: 520, maxWidth: "100%", maxHeight: "85vh", overflowY: "auto" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-extrabold" style={{ textAlign: "center" }}>Avaliação de aula</h3>
+            <h3 className="font-extrabold" style={{ textAlign: "center" }}>
+              {editandoAvaliacaoId ? "Editar avaliação de aula" : "Avaliação de aula"}
+            </h3>
             <div style={{ textAlign: "center", margin: "8px 0 16px" }}>
               <input
                 type="date"
@@ -700,7 +760,7 @@ export default function TreinadorDashboard({
               className="font-bold"
               style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8, marginTop: 16 }}
             >
-              {salvandoAvaliacao ? "Salvando..." : "Salvar avaliação"}
+              {salvandoAvaliacao ? "Salvando..." : editandoAvaliacaoId ? "Salvar edição" : "Salvar avaliação"}
             </button>
           </div>
         </div>
