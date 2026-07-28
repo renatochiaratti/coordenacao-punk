@@ -28,6 +28,18 @@ export type ChecklistItem = {
   concluido: boolean;
 };
 
+export type AvaliacaoItem = {
+  texto: string;
+  ok: boolean;
+};
+
+export type AvaliacaoAula = {
+  id: string;
+  treinador_id: string;
+  data: string;
+  itens: AvaliacaoItem[];
+};
+
 export type Scorecard = {
   id: string;
   treinador_id: string;
