@@ -16,7 +16,30 @@ import type {
   Contrato,
 } from "@/lib/types";
 
-const TOTAL_ITENS_AVALIACAO = 25;
+const PERGUNTAS_AVALIACAO = [
+  "Iniciou no horário?",
+  "O briefing foi completo?",
+  "Mobilizou as articulações?",
+  "Subiu a frequência?",
+  "Foi coerente?",
+  "Organizou a turma no ensino?",
+  "O ensino foi coerente?",
+  "Ensinou?",
+  "Observou e corrigiu?",
+  "Usou posições dinâmicas e estáticas?",
+  "Usou o auxiliar de forma inteligente?",
+  "Fez scaling quando necessários?",
+  "Preparou corretamente para WOD? (subiu frequência)",
+  "Foi articulado na explicação do WOD?",
+  "Os alunos ficaram no estimulo pretendido?",
+  "Foi presente no WOD?",
+  "Teve presença e atitude dentro do WOD?",
+  "Fez cool down como combinado?",
+  "Hands free?",
+  "Terminou no horário?",
+];
+
+const TOTAL_ITENS_AVALIACAO = PERGUNTAS_AVALIACAO.length;
 
 const DIA_LABEL: Record<string, string> = {
   segunda: "Seg", terca: "Ter", quarta: "Qua", quinta: "Qui", sexta: "Sex", sabado: "Sáb", domingo: "Dom",
@@ -147,11 +170,11 @@ export default function TreinadorDashboard({
     }
   }
 
-  // ---- Avaliação de aula (tabela de 25 itens) ----
+  // ---- Avaliação de aula (tabela de 20 itens pré-preenchidos) ----
   const [showAvaliacaoModal, setShowAvaliacaoModal] = useState(false);
   const [avaliacaoData, setAvaliacaoData] = useState(hoje);
   const [avaliacaoItens, setAvaliacaoItens] = useState<AvaliacaoItem[]>(
-    Array.from({ length: TOTAL_ITENS_AVALIACAO }, () => ({ texto: "", ok: false }))
+    PERGUNTAS_AVALIACAO.map((texto) => ({ texto, ok: false }))
   );
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
   const [avaliacaoAbertaId, setAvaliacaoAbertaId] = useState<string | null>(null);
@@ -161,16 +184,15 @@ export default function TreinadorDashboard({
   function abrirAvaliacaoModal() {
     setEditandoAvaliacaoId(null);
     setAvaliacaoData(hoje);
-    setAvaliacaoItens(Array.from({ length: TOTAL_ITENS_AVALIACAO }, () => ({ texto: "", ok: false })));
+    setAvaliacaoItens(PERGUNTAS_AVALIACAO.map((texto) => ({ texto, ok: false })));
     setShowAvaliacaoModal(true);
   }
 
   function abrirEdicaoAvaliacao(av: AvaliacaoAula) {
     setEditandoAvaliacaoId(av.id);
     setAvaliacaoData(av.data);
-    const itensPreenchidos = [...av.itens];
-    while (itensPreenchidos.length < TOTAL_ITENS_AVALIACAO) itensPreenchidos.push({ texto: "", ok: false });
-    setAvaliacaoItens(itensPreenchidos.slice(0, TOTAL_ITENS_AVALIACAO));
+    const itensPreenchidos = av.itens.length === TOTAL_ITENS_AVALIACAO ? [...av.itens] : PERGUNTAS_AVALIACAO.map((texto) => ({ texto, ok: false }));
+    setAvaliacaoItens(itensPreenchidos);
     setShowAvaliacaoModal(true);
   }
 
