@@ -13,7 +13,7 @@ export default async function TreinadorPage({ params }: { params: { token: strin
 
   if (!treinador) return notFound();
 
-  const [oneOnOnes, checklist, avaliacoesAula, scorecards, cursos, desenvolvimento, escalas, combinados, contratos] =
+  const [oneOnOnes, checklist, avaliacoesAula, scorecards, cursos, desenvolvimento, escalas, combinados, contratos, nps] =
     await Promise.all([
       supabase.from("one_on_ones").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
       supabase.from("checklist_aulas").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
@@ -24,6 +24,7 @@ export default async function TreinadorPage({ params }: { params: { token: strin
       supabase.from("escalas").select("*").eq("treinador_id", treinador.id),
       supabase.from("combinados").select("*").eq("treinador_id", treinador.id).order("data_combinado", { ascending: false }),
       supabase.from("contratos").select("*").eq("treinador_id", treinador.id),
+      supabase.from("nps").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
     ]);
 
   return (
@@ -38,6 +39,7 @@ export default async function TreinadorPage({ params }: { params: { token: strin
       escalas={escalas.data || []}
       combinados={combinados.data || []}
       contratos={contratos.data || []}
+      nps={nps.data || []}
     />
   );
 }
