@@ -52,7 +52,7 @@ export type Curso = {
   id: string;
   treinador_id: string;
   nome: string;
-  status: "planejado" | "em_andamento" | "concluido";
+  status: "x" | "ok" | "combinado";
   data_conclusao: string | null;
 };
 
@@ -110,4 +110,24 @@ export type CalendarioDia = {
   professor2: string;
   cor_dia: string;
   cor_feriado: string;
+};
+
+export type Nps = {
+  id: string;
+  treinador_id: string;
+  data: string;
+  enviados: number | null;
+  respondidos: number | null;
+  pergunta1: string | null;
+  nota1: number | null;
+  pergunta2: string | null;
+  nota2: number | null;
+  pergunta3: string | null;
+  nota3: number | null;
+  pergunta4: string | null;
+  nota4: number | null;
+  pergunta5: string | null;
+  nota5: number | null;
+  pergunta6: string | null;
+  nota6: number | null;
 };
