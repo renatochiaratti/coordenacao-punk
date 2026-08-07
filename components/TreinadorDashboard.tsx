@@ -14,6 +14,7 @@ import type {
   Escala,
   Combinado,
   Contrato,
+  Nps,
 } from "@/lib/types";
 
 const PERGUNTAS_AVALIACAO = [
@@ -50,6 +51,7 @@ const ABAS = [
   "One-on-One",
   "Checklist Aulas",
   "ScoreCard",
+  "NPS",
   "Cursos",
   "Desenvolvimento",
   "Escala",
@@ -67,11 +69,6 @@ const STATUS_LABEL: Record<string, string> = {
   quebrado: "Quebrado",
 };
 
-const CURSO_CICLO: Record<string, Curso["status"]> = {
-  planejado: "em_andamento",
-  em_andamento: "concluido",
-  concluido: "planejado",
-};
 const DESENV_CICLO: Record<string, Desenvolvimento["status"]> = {
   nao_iniciado: "em_andamento",
   em_andamento: "concluido",
@@ -82,6 +79,32 @@ const COMBINADO_CICLO: Record<string, Combinado["status"]> = {
   pendente: "quebrado",
   quebrado: "em_dia",
 };
+
+const CURSO_STATUS_ORDEM: Curso["status"][] = ["x", "ok", "combinado"];
+const CURSO_STATUS_LABEL: Record<Curso["status"], string> = {
+  x: "X",
+  ok: "OK",
+  combinado: "COMBINADO",
+};
+const CURSO_STATUS_COR: Record<Curso["status"], string> = {
+  x: "#e5484d",
+  ok: "#1fbf5c",
+  combinado: "#f5c518",
+};
+function proximoStatusCurso(atual: Curso["status"]): Curso["status"] {
+  const idx = CURSO_STATUS_ORDEM.indexOf(atual);
+  return CURSO_STATUS_ORDEM[(idx + 1) % CURSO_STATUS_ORDEM.length];
+}
+
+const NPS_PERGUNTA_KEYS = ["pergunta1", "pergunta2", "pergunta3", "pergunta4", "pergunta5", "pergunta6"] as const;
+const NPS_NOTA_KEYS = ["nota1", "nota2", "nota3", "nota4", "nota5", "nota6"] as const;
+
+function calcularNotaTotalNps(notas: (number | null)[]) {
+  const validas = notas.filter((n): n is number => n !== null && !Number.isNaN(n));
+  if (validas.length === 0) return null;
+  const soma = validas.reduce((acc, n) => acc + n, 0);
+  return Math.round((soma / validas.length) * 100) / 100;
+}
 
 export default function TreinadorDashboard({
   treinador,
@@ -94,6 +117,7 @@ export default function TreinadorDashboard({
   escalas,
   combinados,
   contratos,
+  nps,
 }: {
   treinador: Treinador;
   oneOnOnes: OneOnOne[];
@@ -105,6 +129,7 @@ export default function TreinadorDashboard({
   escalas: Escala[];
   combinados: Combinado[];
   contratos: Contrato[];
+  nps: Nps[];
 }) {
   const [aba, setAba] = useState<(typeof ABAS)[number]>("One-on-One");
   const [showModal, setShowModal] = useState(false);
@@ -118,10 +143,10 @@ export default function TreinadorDashboard({
   const [listaEscalas, setListaEscalas] = useState(escalas);
   const [listaCombinados, setListaCombinados] = useState(combinados);
   const [listaContratos, setListaContratos] = useState(contratos);
+  const [listaNps, setListaNps] = useState(nps);
 
   const hoje = new Date().toISOString().slice(0, 10);
 
-  // ---- formulários (estado por aba) ----
   const [fData, setFData] = useState(hoje);
   const [fTexto1, setFTexto1] = useState("");
   const [fTexto2, setFTexto2] = useState("");
@@ -131,7 +156,6 @@ export default function TreinadorDashboard({
   const [fHorario, setFHorario] = useState("06:00");
   const [salvando, setSalvando] = useState(false);
 
-  // ---- One-on-One: respostas por tópico + exclusão ----
   const [respostaDrafts, setRespostaDrafts] = useState<Record<string, string>>({});
   const [salvandoResposta, setSalvandoResposta] = useState<string | null>(null);
   const [apagandoId, setApagandoId] = useState<string | null>(null);
@@ -170,7 +194,6 @@ export default function TreinadorDashboard({
     }
   }
 
-  // ---- Avaliação de aula (tabela de 20 itens pré-preenchidos) ----
   const [showAvaliacaoModal, setShowAvaliacaoModal] = useState(false);
   const [avaliacaoData, setAvaliacaoData] = useState(hoje);
   const [avaliacaoItens, setAvaliacaoItens] = useState<AvaliacaoItem[]>(
@@ -246,6 +269,90 @@ export default function TreinadorDashboard({
     }
   }
 
+  const [showNpsModal, setShowNpsModal] = useState(false);
+  const [editandoNpsId, setEditandoNpsId] = useState<string | null>(null);
+  const [npsData, setNpsData] = useState(hoje);
+  const [npsEnviados, setNpsEnviados] = useState("");
+  const [npsRespondidos, setNpsRespondidos] = useState("");
+  const [npsPerguntas, setNpsPerguntas] = useState<string[]>(["", "", "", "", "", ""]);
+  const [npsNotas, setNpsNotas] = useState<string[]>(["", "", "", "", "", ""]);
+  const [salvandoNps, setSalvandoNps] = useState(false);
+  const [apagandoNpsId, setApagandoNpsId] = useState<string | null>(null);
+
+  function abrirNpsModal() {
+    setEditandoNpsId(null);
+    setNpsData(hoje);
+    setNpsEnviados("");
+    setNpsRespondidos("");
+    setNpsPerguntas(["", "", "", "", "", ""]);
+    setNpsNotas(["", "", "", "", "", ""]);
+    setShowNpsModal(true);
+  }
+
+  function abrirEdicaoNps(item: Nps) {
+    setEditandoNpsId(item.id);
+    setNpsData(item.data);
+    setNpsEnviados(item.enviados !== null ? String(item.enviados) : "");
+    setNpsRespondidos(item.respondidos !== null ? String(item.respondidos) : "");
+    setNpsPerguntas(NPS_PERGUNTA_KEYS.map((k) => item[k] || ""));
+    setNpsNotas(NPS_NOTA_KEYS.map((k) => (item[k] !== null && item[k] !== undefined ? String(item[k]) : "")));
+    setShowNpsModal(true);
+  }
+
+  const npsNotaTotalPreview = calcularNotaTotalNps(
+    npsNotas.map((n) => (n.trim() === "" ? null : parseFloat(n.replace(",", "."))))
+  );
+
+  async function salvarNps() {
+    setSalvandoNps(true);
+    try {
+      const notasNum = npsNotas.map((n) => (n.trim() === "" ? null : parseFloat(n.replace(",", ".")) || 0));
+      const payload = {
+        treinador_id: treinador.id,
+        data: npsData,
+        enviados: npsEnviados.trim() === "" ? null : parseInt(npsEnviados, 10) || 0,
+        respondidos: npsRespondidos.trim() === "" ? null : parseInt(npsRespondidos, 10) || 0,
+        pergunta1: npsPerguntas[0] || null,
+        pergunta2: npsPerguntas[1] || null,
+        pergunta3: npsPerguntas[2] || null,
+        pergunta4: npsPerguntas[3] || null,
+        pergunta5: npsPerguntas[4] || null,
+        pergunta6: npsPerguntas[5] || null,
+        nota1: notasNum[0],
+        nota2: notasNum[1],
+        nota3: notasNum[2],
+        nota4: notasNum[3],
+        nota5: notasNum[4],
+        nota6: notasNum[5],
+      };
+
+      if (editandoNpsId) {
+        const { error } = await supabase.from("nps").update(payload).eq("id", editandoNpsId);
+        if (!error) {
+          setListaNps((p) => p.map((x) => (x.id === editandoNpsId ? { ...x, ...payload } : x)));
+        }
+      } else {
+        const { data, error } = await supabase.from("nps").insert(payload).select().single();
+        if (!error && data) setListaNps((p) => [data as Nps, ...p]);
+      }
+      setShowNpsModal(false);
+      setEditandoNpsId(null);
+    } finally {
+      setSalvandoNps(false);
+    }
+  }
+
+  async function apagarNps(item: Nps) {
+    if (!confirm("Apagar esta pesquisa de NPS?")) return;
+    setApagandoNpsId(item.id);
+    try {
+      const { error } = await supabase.from("nps").delete().eq("id", item.id);
+      if (!error) setListaNps((p) => p.filter((x) => x.id !== item.id));
+    } finally {
+      setApagandoNpsId(null);
+    }
+  }
+
   function abrirModal() {
     setFData(hoje);
     setFTexto1("");
@@ -254,7 +361,7 @@ export default function TreinadorDashboard({
     setFData2("");
     setFHorario("06:00");
     setFSelect(
-      aba === "Cursos" ? "planejado" :
+      aba === "Cursos" ? "x" :
       aba === "Desenvolvimento" ? "nao_iniciado" :
       aba === "Combinados" ? "em_dia" :
       aba === "Escala" ? "segunda" : ""
@@ -335,9 +442,14 @@ export default function TreinadorDashboard({
   }
 
   async function alternarCurso(item: Curso) {
-    const status = CURSO_CICLO[item.status];
+    const status = proximoStatusCurso(item.status);
     setListaCursos((p) => p.map((x) => (x.id === item.id ? { ...x, status } : x)));
     await supabase.from("cursos").update({ status }).eq("id", item.id);
+  }
+
+  async function atualizarDataCurso(item: Curso, novaData: string) {
+    setListaCursos((p) => p.map((x) => (x.id === item.id ? { ...x, data_conclusao: novaData || null } : x)));
+    await supabase.from("cursos").update({ data_conclusao: novaData || null }).eq("id", item.id);
   }
 
   async function alternarDesenvolvimento(item: Desenvolvimento) {
@@ -370,7 +482,7 @@ export default function TreinadorDashboard({
         ))}
       </div>
 
-      {aba !== "Checklist Aulas" && (
+      {aba !== "Checklist Aulas" && aba !== "NPS" && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
           <button
             onClick={abrirModal}
@@ -550,18 +662,155 @@ export default function TreinadorDashboard({
           />
         )}
 
+        {aba === "NPS" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+              <button
+                onClick={abrirNpsModal}
+                className="font-bold"
+                style={{ background: "#ff6a00", color: "#0d0d0d", padding: "8px 16px", borderRadius: 8 }}
+              >
+                + Adicionar pesquisa
+              </button>
+            </div>
+
+            {listaNps.length === 0 ? (
+              <p style={{ color: "#9a9a9f", textAlign: "center", padding: 20 }}>Nenhuma pesquisa de NPS registrada ainda.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {listaNps.map((item, i) => {
+                  const notaTotal = calcularNotaTotalNps(NPS_NOTA_KEYS.map((k) => item[k]));
+                  const perguntasPreenchidas = NPS_PERGUNTA_KEYS.map((k, idx) => ({
+                    pergunta: item[k],
+                    nota: item[NPS_NOTA_KEYS[idx]],
+                  })).filter((p) => p.pergunta && p.pergunta.trim() !== "");
+
+                  return (
+                    <div
+                      key={item.id}
+                      style={{
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 8,
+                        padding: 14,
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div>
+                          <div className="font-bold">{fmtDate(item.data)}</div>
+                          <div style={{ color: "#9a9a9f", fontSize: 13, marginTop: 2 }}>
+                            Amostral: {item.respondidos ?? "—"} respondidas de {item.enviados ?? "—"} enviadas
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            onClick={() => abrirEdicaoNps(item)}
+                            title="Editar"
+                            style={{ background: "transparent", border: "none", fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1 }}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => apagarNps(item)}
+                            disabled={apagandoNpsId === item.id}
+                            title="Apagar"
+                            style={{ color: "#ff5a5a", background: "transparent", border: "none", fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1 }}
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </div>
+
+                      {perguntasPreenchidas.length > 0 && (
+                        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+                          {perguntasPreenchidas.map((p, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                fontSize: 13,
+                                padding: "4px 0",
+                                borderBottom: idx < perguntasPreenchidas.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
+                              }}
+                            >
+                              <span>{p.pergunta}</span>
+                              <span className="font-extrabold" style={{ color: "#ff6a00" }}>
+                                {p.nota !== null ? p.nota : "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          marginTop: 12,
+                          paddingTop: 10,
+                          borderTop: "1px solid rgba(255,255,255,0.08)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span className="font-bold" style={{ fontSize: 13 }}>Nota total</span>
+                        <span className="font-extrabold" style={{ color: "#ff6a00", fontSize: 16 }}>
+                          {notaTotal !== null ? notaTotal : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {aba === "Cursos" && (
-          <Lista
-            vazio="Nenhum curso cadastrado ainda."
-            itens={listaCursos.map((c) => ({
-              id: c.id,
-              titulo: c.nome,
-              corpo: c.data_conclusao ? fmtDate(c.data_conclusao) : "",
-              status: c.status,
-              statusLabel: STATUS_LABEL[c.status],
-              onClick: () => alternarCurso(c),
-            }))}
-          />
+          listaCursos.length === 0 ? (
+            <p style={{ color: "#9a9a9f", textAlign: "center", padding: 20 }}>Nenhum curso cadastrado ainda.</p>
+          ) : (
+            <div>
+              {listaCursos.map((c, i) => (
+                <div
+                  key={c.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "12px 4px",
+                    borderBottom: i < listaCursos.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div className="font-bold" style={{ flex: 1, minWidth: 140 }}>{c.nome}</div>
+                  <input
+                    type="date"
+                    value={c.data_conclusao || ""}
+                    onChange={(e) => atualizarDataCurso(c, e.target.value)}
+                    style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 13 }}
+                  />
+                  <button
+                    onClick={() => alternarCurso(c)}
+                    className="font-extrabold"
+                    style={{
+                      minWidth: 96,
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      border: "none",
+                      cursor: "pointer",
+                      background: CURSO_STATUS_COR[c.status],
+                      color: "#0d0d0d",
+                      fontSize: 13,
+                    }}
+                  >
+                    {CURSO_STATUS_LABEL[c.status]}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
         )}
 
         {aba === "Desenvolvimento" && (
@@ -650,12 +899,12 @@ export default function TreinadorDashboard({
                 <Campo label="Nome do curso"><input value={fTexto1} onChange={(e) => setFTexto1(e.target.value)} style={inputStyle} /></Campo>
                 <Campo label="Status">
                   <select value={fSelect} onChange={(e) => setFSelect(e.target.value)} style={inputStyle}>
-                    <option value="planejado">Planejado</option>
-                    <option value="em_andamento">Em andamento</option>
-                    <option value="concluido">Concluído</option>
+                    <option value="x">X</option>
+                    <option value="ok">OK</option>
+                    <option value="combinado">COMBINADO</option>
                   </select>
                 </Campo>
-                <Campo label="Data de conclusão (opcional)"><input type="date" value={fData2} onChange={(e) => setFData2(e.target.value)} style={inputStyle} /></Campo>
+                <Campo label="Data (opcional)"><input type="date" value={fData2} onChange={(e) => setFData2(e.target.value)} style={inputStyle} /></Campo>
               </>
             )}
 
@@ -783,6 +1032,111 @@ export default function TreinadorDashboard({
               style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8, marginTop: 16 }}
             >
               {salvandoAvaliacao ? "Salvando..." : editandoAvaliacaoId ? "Salvar edição" : "Salvar avaliação"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showNpsModal && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }}
+          onClick={() => setShowNpsModal(false)}
+        >
+          <div
+            className="card"
+            style={{ padding: 24, width: 520, maxWidth: "100%", maxHeight: "85vh", overflowY: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-extrabold" style={{ textAlign: "center" }}>
+              {editandoNpsId ? "Editar pesquisa de NPS" : "Nova pesquisa de NPS"}
+            </h3>
+
+            <div style={{ display: "flex", gap: 10, margin: "16px 0" }}>
+              <div style={{ flex: 1 }}>
+                <Campo label="Data"><input type="date" value={npsData} onChange={(e) => setNpsData(e.target.value)} style={inputStyle} /></Campo>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
+              <div style={{ flex: 1 }}>
+                <Campo label="Campo amostral — Enviados">
+                  <input
+                    value={npsEnviados}
+                    onChange={(e) => setNpsEnviados(e.target.value)}
+                    style={inputStyle}
+                    inputMode="numeric"
+                    placeholder="Ex: 40"
+                  />
+                </Campo>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Campo label="Campo amostral — Respondidos">
+                  <input
+                    value={npsRespondidos}
+                    onChange={(e) => setNpsRespondidos(e.target.value)}
+                    style={inputStyle}
+                    inputMode="numeric"
+                    placeholder="Ex: 25"
+                  />
+                </Campo>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+              {[0, 1, 2, 3, 4, 5].map((idx) => (
+                <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#9a9a9f", marginBottom: 4 }}>
+                      Pergunta {idx + 1}
+                    </label>
+                    <input
+                      value={npsPerguntas[idx]}
+                      onChange={(e) =>
+                        setNpsPerguntas((p) => p.map((v, i) => (i === idx ? e.target.value : v)))
+                      }
+                      style={inputStyle}
+                      placeholder="Escreva a pergunta"
+                    />
+                  </div>
+                  <div style={{ width: 74 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#9a9a9f", marginBottom: 4 }}>Nota</label>
+                    <input
+                      value={npsNotas[idx]}
+                      onChange={(e) =>
+                        setNpsNotas((p) => p.map((v, i) => (i === idx ? e.target.value : v)))
+                      }
+                      style={inputStyle}
+                      inputMode="decimal"
+                      placeholder="0-10"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                marginTop: 16,
+                paddingTop: 12,
+                borderTop: "1px solid rgba(255,255,255,0.08)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span className="font-bold">Nota total (média automática)</span>
+              <span className="font-extrabold" style={{ color: "#ff6a00", fontSize: 18 }}>
+                {npsNotaTotalPreview !== null ? npsNotaTotalPreview : "—"}
+              </span>
+            </div>
+
+            <button
+              onClick={salvarNps}
+              disabled={salvandoNps}
+              className="font-bold"
+              style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8, marginTop: 16 }}
+            >
+              {salvandoNps ? "Salvando..." : editandoNpsId ? "Salvar edição" : "Salvar pesquisa"}
             </button>
           </div>
         </div>
