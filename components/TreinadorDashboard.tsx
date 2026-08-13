@@ -169,9 +169,11 @@ export default function TreinadorDashboard({
     setSalvandoResposta(item.id);
     try {
       const { error } = await supabase.from("one_on_ones").update({ observacoes: texto || null }).eq("id", item.id);
-      if (!error) {
-        setListaOneOnOnes((p) => p.map((x) => (x.id === item.id ? { ...x, observacoes: texto || null } : x)));
+      if (error) {
+        alert("Não foi possível salvar a resposta: " + error.message);
+        return;
       }
+      setListaOneOnOnes((p) => p.map((x) => (x.id === item.id ? { ...x, observacoes: texto || null } : x)));
     } finally {
       setSalvandoResposta(null);
     }
