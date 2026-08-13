@@ -328,12 +328,18 @@ export default function TreinadorDashboard({
 
       if (editandoNpsId) {
         const { error } = await supabase.from("nps").update(payload).eq("id", editandoNpsId);
-        if (!error) {
-          setListaNps((p) => p.map((x) => (x.id === editandoNpsId ? { ...x, ...payload } : x)));
+        if (error) {
+          alert("Não foi possível salvar a pesquisa de NPS: " + error.message);
+          return;
         }
+        setListaNps((p) => p.map((x) => (x.id === editandoNpsId ? { ...x, ...payload } : x)));
       } else {
         const { data, error } = await supabase.from("nps").insert(payload).select().single();
-        if (!error && data) setListaNps((p) => [data as Nps, ...p]);
+        if (error) {
+          alert("Não foi possível salvar a pesquisa de NPS: " + error.message);
+          return;
+        }
+        if (data) setListaNps((p) => [data as Nps, ...p]);
       }
       setShowNpsModal(false);
       setEditandoNpsId(null);
@@ -580,7 +586,9 @@ export default function TreinadorDashboard({
                 </p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {listaAvaliacoes.map((av) => {
+                  {[...listaAvaliacoes]
+                    .sort((a, b) => b.data.localeCompare(a.data))
+                    .map((av) => {
                     const preenchidos = av.itens.filter((it) => it.texto.trim() !== "");
                     const okCount = preenchidos.filter((it) => it.ok).length;
                     const aberta = avaliacaoAbertaId === av.id;
