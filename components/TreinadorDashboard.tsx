@@ -14,7 +14,8 @@ import type {
   Escala,
   Combinado,
   Contrato,
-  Nps,
+  NpsPesquisa,
+  NpsResposta,
 } from "@/lib/types";
 
 const PERGUNTAS_AVALIACAO = [
@@ -99,11 +100,59 @@ function proximoStatusCurso(atual: Curso["status"]): Curso["status"] {
 const NPS_PERGUNTA_KEYS = ["pergunta1", "pergunta2", "pergunta3", "pergunta4", "pergunta5", "pergunta6"] as const;
 const NPS_NOTA_KEYS = ["nota1", "nota2", "nota3", "nota4", "nota5", "nota6"] as const;
 
-function calcularNotaTotalNps(notas: (number | null)[]) {
-  const validas = notas.filter((n): n is number => n !== null && !Number.isNaN(n));
-  if (validas.length === 0) return null;
-  const soma = validas.reduce((acc, n) => acc + n, 0);
-  return Math.round((soma / validas.length) * 100) / 100;
+const NPS_PERGUNTAS_PADRAO = [
+  "De 0 a 10, o quanto você recomendaria a Punk CrossFit para um amigo?",
+  "Como você avalia a qualidade das aulas?",
+  "Como você avalia o atendimento da equipe?",
+  "Como você avalia a estrutura e limpeza da academia?",
+  "Como você avalia a pontualidade e organização das aulas?",
+  "Como você avalia sua evolução física desde que começou?",
+];
+
+function classificarNpsScore(score: number) {
+  if (score > 75) return { label: "Excelente", cor: "#1fbf5c" };
+  if (score >= 50) return { label: "Muito bom", cor: "#8bd450" };
+  if (score >= 0) return { label: "Bom", cor: "#f5c518" };
+  return { label: "Precisa melhorar", cor: "#e5484d" };
+}
+
+function calcularRelatorioNps(pesquisa: NpsPesquisa & { nps_respostas: NpsResposta[] }) {
+  const respostas = pesquisa.nps_respostas || [];
+  if (respostas.length === 0) return null;
+
+  const medias = NPS_NOTA_KEYS.map((key) => {
+    const soma = respostas.reduce((acc, r) => acc + (r[key] ?? 0), 0);
+    return Math.round((soma / respostas.length) * 100) / 100;
+  });
+
+  const notas1 = respostas.map((r) => r.nota1);
+  const promotores = notas1.filter((n) => n >= 9).length;
+  const detratores = notas1.filter((n) => n <= 6).length;
+  const total = notas1.length;
+  const npsScore = Math.round(((promotores - detratores) / total) * 100);
+  const classificacao = classificarNpsScore(npsScore);
+
+  let maxIdx = 0;
+  let minIdx = 0;
+  medias.forEach((m, i) => {
+    if (m > medias[maxIdx]) maxIdx = i;
+    if (m < medias[minIdx]) minIdx = i;
+  });
+
+  const pontoForte = { pergunta: pesquisa[NPS_PERGUNTA_KEYS[maxIdx]], media: medias[maxIdx] };
+  const pontoFraco = { pergunta: pesquisa[NPS_PERGUNTA_KEYS[minIdx]], media: medias[minIdx] };
+
+  return {
+    total,
+    promotores,
+    passivos: total - promotores - detratores,
+    detratores,
+    npsScore,
+    classificacao,
+    medias,
+    pontoForte,
+    pontoFraco,
+  };
 }
 
 export default function TreinadorDashboard({
@@ -117,7 +166,7 @@ export default function TreinadorDashboard({
   escalas,
   combinados,
   contratos,
-  nps,
+  npsPesquisas,
 }: {
   treinador: Treinador;
   oneOnOnes: OneOnOne[];
@@ -129,7 +178,7 @@ export default function TreinadorDashboard({
   escalas: Escala[];
   combinados: Combinado[];
   contratos: Contrato[];
-  nps: Nps[];
+  npsPesquisas: (NpsPesquisa & { nps_respostas: NpsResposta[] })[];
 }) {
   const [aba, setAba] = useState<(typeof ABAS)[number]>("One-on-One");
   const [showModal, setShowModal] = useState(false);
@@ -143,7 +192,8 @@ export default function TreinadorDashboard({
   const [listaEscalas, setListaEscalas] = useState(escalas);
   const [listaCombinados, setListaCombinados] = useState(combinados);
   const [listaContratos, setListaContratos] = useState(contratos);
-  const [listaNps, setListaNps] = useState(nps);
+  const [listaPesquisas, setListaPesquisas] = useState(npsPesquisas);
+  const [linkCopiadoId, setLinkCopiadoId] = useState<string | null>(null);
 
   const hoje = new Date().toISOString().slice(0, 10);
 
@@ -275,9 +325,7 @@ export default function TreinadorDashboard({
   const [editandoNpsId, setEditandoNpsId] = useState<string | null>(null);
   const [npsData, setNpsData] = useState(hoje);
   const [npsEnviados, setNpsEnviados] = useState("");
-  const [npsRespondidos, setNpsRespondidos] = useState("");
-  const [npsPerguntas, setNpsPerguntas] = useState<string[]>(["", "", "", "", "", ""]);
-  const [npsNotas, setNpsNotas] = useState<string[]>(["", "", "", "", "", ""]);
+  const [npsPerguntas, setNpsPerguntas] = useState<string[]>([...NPS_PERGUNTAS_PADRAO]);
   const [salvandoNps, setSalvandoNps] = useState(false);
   const [apagandoNpsId, setApagandoNpsId] = useState<string | null>(null);
 
@@ -285,63 +333,47 @@ export default function TreinadorDashboard({
     setEditandoNpsId(null);
     setNpsData(hoje);
     setNpsEnviados("");
-    setNpsRespondidos("");
-    setNpsPerguntas(["", "", "", "", "", ""]);
-    setNpsNotas(["", "", "", "", "", ""]);
+    setNpsPerguntas([...NPS_PERGUNTAS_PADRAO]);
     setShowNpsModal(true);
   }
 
-  function abrirEdicaoNps(item: Nps) {
+  function abrirEdicaoNps(item: NpsPesquisa) {
     setEditandoNpsId(item.id);
     setNpsData(item.data);
     setNpsEnviados(item.enviados !== null ? String(item.enviados) : "");
-    setNpsRespondidos(item.respondidos !== null ? String(item.respondidos) : "");
     setNpsPerguntas(NPS_PERGUNTA_KEYS.map((k) => item[k] || ""));
-    setNpsNotas(NPS_NOTA_KEYS.map((k) => (item[k] !== null && item[k] !== undefined ? String(item[k]) : "")));
     setShowNpsModal(true);
   }
-
-  const npsNotaTotalPreview = calcularNotaTotalNps(
-    npsNotas.map((n) => (n.trim() === "" ? null : parseFloat(n.replace(",", "."))))
-  );
 
   async function salvarNps() {
     setSalvandoNps(true);
     try {
-      const notasNum = npsNotas.map((n) => (n.trim() === "" ? null : parseFloat(n.replace(",", ".")) || 0));
       const payload = {
         treinador_id: treinador.id,
         data: npsData,
         enviados: npsEnviados.trim() === "" ? null : parseInt(npsEnviados, 10) || 0,
-        respondidos: npsRespondidos.trim() === "" ? null : parseInt(npsRespondidos, 10) || 0,
-        pergunta1: npsPerguntas[0] || null,
-        pergunta2: npsPerguntas[1] || null,
-        pergunta3: npsPerguntas[2] || null,
-        pergunta4: npsPerguntas[3] || null,
-        pergunta5: npsPerguntas[4] || null,
-        pergunta6: npsPerguntas[5] || null,
-        nota1: notasNum[0],
-        nota2: notasNum[1],
-        nota3: notasNum[2],
-        nota4: notasNum[3],
-        nota5: notasNum[4],
-        nota6: notasNum[5],
+        pergunta1: npsPerguntas[0],
+        pergunta2: npsPerguntas[1],
+        pergunta3: npsPerguntas[2],
+        pergunta4: npsPerguntas[3],
+        pergunta5: npsPerguntas[4],
+        pergunta6: npsPerguntas[5],
       };
 
       if (editandoNpsId) {
-        const { error } = await supabase.from("nps").update(payload).eq("id", editandoNpsId);
+        const { error } = await supabase.from("nps_pesquisas").update(payload).eq("id", editandoNpsId);
         if (error) {
           alert("Não foi possível salvar a pesquisa de NPS: " + error.message);
           return;
         }
-        setListaNps((p) => p.map((x) => (x.id === editandoNpsId ? { ...x, ...payload } : x)));
+        setListaPesquisas((p) => p.map((x) => (x.id === editandoNpsId ? { ...x, ...payload } : x)));
       } else {
-        const { data, error } = await supabase.from("nps").insert(payload).select().single();
+        const { data, error } = await supabase.from("nps_pesquisas").insert(payload).select().single();
         if (error) {
           alert("Não foi possível salvar a pesquisa de NPS: " + error.message);
           return;
         }
-        if (data) setListaNps((p) => [data as Nps, ...p]);
+        if (data) setListaPesquisas((p) => [{ ...(data as NpsPesquisa), nps_respostas: [] }, ...p]);
       }
       setShowNpsModal(false);
       setEditandoNpsId(null);
@@ -350,14 +382,29 @@ export default function TreinadorDashboard({
     }
   }
 
-  async function apagarNps(item: Nps) {
-    if (!confirm("Apagar esta pesquisa de NPS?")) return;
+  async function apagarNps(item: NpsPesquisa) {
+    if (!confirm("Apagar esta pesquisa de NPS? Todas as respostas recebidas também serão apagadas.")) return;
     setApagandoNpsId(item.id);
     try {
-      const { error } = await supabase.from("nps").delete().eq("id", item.id);
-      if (!error) setListaNps((p) => p.filter((x) => x.id !== item.id));
+      const { error } = await supabase.from("nps_pesquisas").delete().eq("id", item.id);
+      if (!error) setListaPesquisas((p) => p.filter((x) => x.id !== item.id));
     } finally {
       setApagandoNpsId(null);
+    }
+  }
+
+  function linkDaPesquisa(token: string) {
+    const base = typeof window !== "undefined" ? window.location.origin : "https://coordenacao-punk.vercel.app";
+    return `${base}/nps/${token}`;
+  }
+
+  async function copiarLink(item: NpsPesquisa) {
+    try {
+      await navigator.clipboard.writeText(linkDaPesquisa(item.token));
+      setLinkCopiadoId(item.id);
+      setTimeout(() => setLinkCopiadoId(null), 2000);
+    } catch {
+      alert("Não foi possível copiar o link. Copie manualmente: " + linkDaPesquisa(item.token));
     }
   }
 
@@ -684,16 +731,14 @@ export default function TreinadorDashboard({
               </button>
             </div>
 
-            {listaNps.length === 0 ? (
+            {listaPesquisas.length === 0 ? (
               <p style={{ color: "#9a9a9f", textAlign: "center", padding: 20 }}>Nenhuma pesquisa de NPS registrada ainda.</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {listaNps.map((item, i) => {
-                  const notaTotal = calcularNotaTotalNps(NPS_NOTA_KEYS.map((k) => item[k]));
-                  const perguntasPreenchidas = NPS_PERGUNTA_KEYS.map((k, idx) => ({
-                    pergunta: item[k],
-                    nota: item[NPS_NOTA_KEYS[idx]],
-                  })).filter((p) => p.pergunta && p.pergunta.trim() !== "");
+                {[...listaPesquisas]
+                  .sort((a, b) => b.data.localeCompare(a.data))
+                  .map((item) => {
+                  const relatorio = calcularRelatorioNps(item);
 
                   return (
                     <div
@@ -708,7 +753,7 @@ export default function TreinadorDashboard({
                         <div>
                           <div className="font-bold">{fmtDate(item.data)}</div>
                           <div style={{ color: "#9a9a9f", fontSize: 13, marginTop: 2 }}>
-                            Amostral: {item.respondidos ?? "—"} respondidas de {item.enviados ?? "—"} enviadas
+                            {relatorio ? relatorio.total : 0} resposta(s) recebida(s){item.enviados ? ` de ${item.enviados} enviadas` : ""}
                           </div>
                         </div>
                         <div style={{ display: "flex", gap: 6 }}>
@@ -730,44 +775,85 @@ export default function TreinadorDashboard({
                         </div>
                       </div>
 
-                      {perguntasPreenchidas.length > 0 && (
-                        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
-                          {perguntasPreenchidas.map((p, idx) => (
-                            <div
-                              key={idx}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                fontSize: 13,
-                                padding: "4px 0",
-                                borderBottom: idx < perguntasPreenchidas.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
-                              }}
-                            >
-                              <span>{p.pergunta}</span>
-                              <span className="font-extrabold" style={{ color: "#ff6a00" }}>
-                                {p.nota !== null ? p.nota : "—"}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <div
+                      <button
+                        onClick={() => copiarLink(item)}
+                        className="font-bold"
                         style={{
-                          marginTop: 12,
-                          paddingTop: 10,
-                          borderTop: "1px solid rgba(255,255,255,0.08)",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
+                          marginTop: 10,
+                          background: "#1f2024",
+                          color: "#f2f2f0",
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          fontSize: 13,
+                          cursor: "pointer",
                         }}
                       >
-                        <span className="font-bold" style={{ fontSize: 13 }}>Nota total</span>
-                        <span className="font-extrabold" style={{ color: "#ff6a00", fontSize: 16 }}>
-                          {notaTotal !== null ? notaTotal : "—"}
-                        </span>
-                      </div>
+                        {linkCopiadoId === item.id ? "Link copiado! ✓" : "🔗 Copiar link da pesquisa"}
+                      </button>
+
+                      {!relatorio ? (
+                        <p style={{ color: "#9a9a9f", fontSize: 13, marginTop: 12 }}>
+                          Ainda não há respostas para esta pesquisa. Envie o link acima para os alunos.
+                        </p>
+                      ) : (
+                        <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                            <span className="font-bold" style={{ fontSize: 13 }}>NPS Score</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span className="font-extrabold" style={{ color: "#ff6a00", fontSize: 18 }}>{relatorio.npsScore}</span>
+                              <span
+                                className="font-extrabold"
+                                style={{ background: relatorio.classificacao.cor, color: "#0d0d0d", padding: "2px 8px", borderRadius: 6, fontSize: 12 }}
+                              >
+                                {relatorio.classificacao.label}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", gap: 10, fontSize: 12, color: "#9a9a9f", marginBottom: 14 }}>
+                            <span>🟢 {relatorio.promotores} promotor(es)</span>
+                            <span>🟡 {relatorio.passivos} neutro(s)</span>
+                            <span>🔴 {relatorio.detratores} detrator(es)</span>
+                          </div>
+
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14 }}>
+                            {NPS_PERGUNTA_KEYS.map((key, idx) => (
+                              <div
+                                key={key}
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  fontSize: 13,
+                                  padding: "4px 0",
+                                  borderBottom: idx < 5 ? "1px solid rgba(255,255,255,0.06)" : "none",
+                                }}
+                              >
+                                <span>{item[key]}</span>
+                                <span className="font-extrabold" style={{ color: "#ff6a00" }}>{relatorio.medias[idx]}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            <div style={{ background: "rgba(31,191,92,0.1)", border: "1px solid rgba(31,191,92,0.3)", borderRadius: 8, padding: 10 }}>
+                              <span className="font-extrabold" style={{ color: "#1fbf5c", fontSize: 12 }}>PONTO FORTE</span>
+                              <p style={{ fontSize: 13, marginTop: 4 }}>{relatorio.pontoForte.pergunta} (média {relatorio.pontoForte.media})</p>
+                            </div>
+                            <div style={{ background: "rgba(229,72,77,0.1)", border: "1px solid rgba(229,72,77,0.3)", borderRadius: 8, padding: 10 }}>
+                              <span className="font-extrabold" style={{ color: "#e5484d", fontSize: 12 }}>PONTO FRACO</span>
+                              <p style={{ fontSize: 13, marginTop: 4 }}>{relatorio.pontoFraco.pergunta} (média {relatorio.pontoFraco.media})</p>
+                            </div>
+                            <div style={{ background: "rgba(255,106,0,0.1)", border: "1px solid rgba(255,106,0,0.3)", borderRadius: 8, padding: 10 }}>
+                              <span className="font-extrabold" style={{ color: "#ff6a00", fontSize: 12 }}>SUGESTÃO DE FOCO</span>
+                              <p style={{ fontSize: 13, marginTop: 4 }}>
+                                Priorize melhorar "{relatorio.pontoFraco.pergunta}" — é o ponto com a menor média entre os avaliados.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1060,84 +1146,43 @@ export default function TreinadorDashboard({
             <h3 className="font-extrabold" style={{ textAlign: "center" }}>
               {editandoNpsId ? "Editar pesquisa de NPS" : "Nova pesquisa de NPS"}
             </h3>
+            <p style={{ color: "#9a9a9f", fontSize: 12, textAlign: "center", marginTop: 6 }}>
+              As perguntas já vêm preenchidas — edite se quiser. Depois de salvar, um link será gerado para você enviar aos alunos.
+            </p>
 
             <div style={{ display: "flex", gap: 10, margin: "16px 0" }}>
               <div style={{ flex: 1 }}>
                 <Campo label="Data"><input type="date" value={npsData} onChange={(e) => setNpsData(e.target.value)} style={inputStyle} /></Campo>
               </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
               <div style={{ flex: 1 }}>
-                <Campo label="Campo amostral — Enviados">
+                <Campo label="Quantos alunos vai enviar (opcional)">
                   <input
                     value={npsEnviados}
                     onChange={(e) => setNpsEnviados(e.target.value)}
                     style={inputStyle}
                     inputMode="numeric"
-                    placeholder="Ex: 40"
-                  />
-                </Campo>
-              </div>
-              <div style={{ flex: 1 }}>
-                <Campo label="Campo amostral — Respondidos">
-                  <input
-                    value={npsRespondidos}
-                    onChange={(e) => setNpsRespondidos(e.target.value)}
-                    style={inputStyle}
-                    inputMode="numeric"
-                    placeholder="Ex: 25"
+                    placeholder="Ex: 20"
                   />
                 </Campo>
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
               {[0, 1, 2, 3, 4, 5].map((idx) => (
-                <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: "block", fontSize: 12, color: "#9a9a9f", marginBottom: 4 }}>
-                      Pergunta {idx + 1}
-                    </label>
-                    <input
-                      value={npsPerguntas[idx]}
-                      onChange={(e) =>
-                        setNpsPerguntas((p) => p.map((v, i) => (i === idx ? e.target.value : v)))
-                      }
-                      style={inputStyle}
-                      placeholder="Escreva a pergunta"
-                    />
-                  </div>
-                  <div style={{ width: 74 }}>
-                    <label style={{ display: "block", fontSize: 12, color: "#9a9a9f", marginBottom: 4 }}>Nota</label>
-                    <input
-                      value={npsNotas[idx]}
-                      onChange={(e) =>
-                        setNpsNotas((p) => p.map((v, i) => (i === idx ? e.target.value : v)))
-                      }
-                      style={inputStyle}
-                      inputMode="decimal"
-                      placeholder="0-10"
-                    />
-                  </div>
+                <div key={idx}>
+                  <label style={{ display: "block", fontSize: 12, color: "#9a9a9f", marginBottom: 4 }}>
+                    Pergunta {idx + 1}
+                  </label>
+                  <input
+                    value={npsPerguntas[idx]}
+                    onChange={(e) =>
+                      setNpsPerguntas((p) => p.map((v, i) => (i === idx ? e.target.value : v)))
+                    }
+                    style={inputStyle}
+                    placeholder="Escreva a pergunta"
+                  />
                 </div>
               ))}
-            </div>
-
-            <div
-              style={{
-                marginTop: 16,
-                paddingTop: 12,
-                borderTop: "1px solid rgba(255,255,255,0.08)",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span className="font-bold">Nota total (média automática)</span>
-              <span className="font-extrabold" style={{ color: "#ff6a00", fontSize: 18 }}>
-                {npsNotaTotalPreview !== null ? npsNotaTotalPreview : "—"}
-              </span>
             </div>
 
             <button
