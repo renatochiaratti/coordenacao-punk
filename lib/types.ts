@@ -131,3 +131,29 @@ export type Nps = {
   pergunta6: string | null;
   nota6: number | null;
 };
+
+export type NpsPesquisa = {
+  id: string;
+  treinador_id: string;
+  data: string;
+  token: string;
+  pergunta1: string;
+  pergunta2: string;
+  pergunta3: string;
+  pergunta4: string;
+  pergunta5: string;
+  pergunta6: string;
+  enviados: number | null;
+};
+
+export type NpsResposta = {
+  id: string;
+  pesquisa_id: string;
+  nota1: number;
+  nota2: number;
+  nota3: number;
+  nota4: number;
+  nota5: number;
+  nota6: number;
+  created_at: string;
+};
