@@ -1169,10 +1169,49 @@ export default function TreinadorDashboard({
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
               {[0, 1, 2, 3, 4, 5].map((idx) => (
-                <div key={idx}>
-                  <label style={{ display: "block", fontSize: 12, color: "#9a9a9f", marginBottom: 4 }}>
-                    Pergunta {idx + 1}
-                  </label>
+                <div
+                  key={idx}
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 10,
+                    padding: 12,
+                    background: "#1a1b1f",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span
+                        className="font-extrabold"
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: "50%",
+                          background: "#ff6a00",
+                          color: "#0d0d0d",
+                          fontSize: 12,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#9a9a9f" }}>Pergunta {idx + 1}</span>
+                    </div>
+                    <span
+                      className="font-bold"
+                      style={{
+                        fontSize: 11,
+                        color: "#ff6a00",
+                        border: "1px solid rgba(255,106,0,0.4)",
+                        borderRadius: 6,
+                        padding: "2px 8px",
+                      }}
+                    >
+                      Nota 0-10
+                    </span>
+                  </div>
                   <input
                     value={npsPerguntas[idx]}
                     onChange={(e) =>
