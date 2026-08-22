@@ -143,6 +143,7 @@ export type NpsPesquisa = {
   pergunta4: string;
   pergunta5: string;
   pergunta6: string;
+  pergunta7: string;
   enviados: number | null;
 };
 
@@ -155,5 +156,6 @@ export type NpsResposta = {
   nota4: number;
   nota5: number;
   nota6: number;
+  resposta7: string | null;
   created_at: string;
 };
