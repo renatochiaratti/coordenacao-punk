@@ -8,6 +8,7 @@ const PERGUNTA_KEYS = ["pergunta1", "pergunta2", "pergunta3", "pergunta4", "perg
 
 export default function NpsForm({ pesquisa }: { pesquisa: NpsPesquisa }) {
   const [notas, setNotas] = useState<(number | null)[]>([null, null, null, null, null, null]);
+  const [resposta7, setResposta7] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -31,6 +32,7 @@ export default function NpsForm({ pesquisa }: { pesquisa: NpsPesquisa }) {
         nota4: notas[3],
         nota5: notas[4],
         nota6: notas[5],
+        resposta7: resposta7.trim() || null,
       });
       if (error) {
         setErro("Não foi possível enviar sua resposta: " + error.message);
@@ -84,6 +86,26 @@ export default function NpsForm({ pesquisa }: { pesquisa: NpsPesquisa }) {
             </div>
           </div>
         ))}
+
+        <div>
+          <p className="font-bold" style={{ marginBottom: 10 }}>
+            {pesquisa.pergunta7} <span style={{ color: "#9a9a9f", fontWeight: 400 }}>(opcional)</span>
+          </p>
+          <textarea
+            value={resposta7}
+            onChange={(e) => setResposta7(e.target.value)}
+            placeholder="Escreva aqui..."
+            style={{
+              width: "100%",
+              minHeight: 90,
+              padding: 10,
+              background: "#1f2024",
+              border: "1px solid rgba(255,255,255,0.14)",
+              borderRadius: 8,
+              color: "#f2f2f0",
+            }}
+          />
+        </div>
       </div>
 
       {erro && <p style={{ color: "#e5484d", fontSize: 13, marginTop: 16 }}>{erro}</p>}
