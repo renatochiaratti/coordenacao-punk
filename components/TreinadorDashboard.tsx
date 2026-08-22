@@ -127,10 +127,12 @@ function calcularRelatorioNps(pesquisa: NpsPesquisa & { nps_respostas: NpsRespos
     return Math.round((soma / respostas.length) * 100) / 100;
   });
 
-  const notas1 = respostas.map((r) => r.nota1);
-  const promotores = notas1.filter((n) => n >= 9).length;
-  const detratores = notas1.filter((n) => n <= 6).length;
-  const total = notas1.length;
+  const mediasPorAluno = respostas.map(
+    (r) => (r.nota1 + r.nota2 + r.nota3 + r.nota4 + r.nota5 + r.nota6) / 6
+  );
+  const promotores = mediasPorAluno.filter((m) => m >= 9).length;
+  const detratores = mediasPorAluno.filter((m) => m <= 6).length;
+  const total = mediasPorAluno.length;
   const npsScore = Math.round(((promotores - detratores) / total) * 100);
   const classificacao = classificarNpsScore(npsScore);
 
