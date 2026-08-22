@@ -109,6 +109,8 @@ const NPS_PERGUNTAS_PADRAO = [
   "Como você avalia sua evolução física desde que começou?",
 ];
 
+const NPS_PERGUNTA7_PADRAO = "Deixe aqui um elogio ou uma sugestão para seu professor…";
+
 function classificarNpsScore(score: number) {
   if (score > 75) return { label: "Excelente", cor: "#1fbf5c" };
   if (score >= 50) return { label: "Muito bom", cor: "#8bd450" };
@@ -142,6 +144,10 @@ function calcularRelatorioNps(pesquisa: NpsPesquisa & { nps_respostas: NpsRespos
   const pontoForte = { pergunta: pesquisa[NPS_PERGUNTA_KEYS[maxIdx]], media: medias[maxIdx] };
   const pontoFraco = { pergunta: pesquisa[NPS_PERGUNTA_KEYS[minIdx]], media: medias[minIdx] };
 
+  const comentarios = respostas
+    .map((r) => r.resposta7)
+    .filter((c): c is string => !!c && c.trim() !== "");
+
   return {
     total,
     promotores,
@@ -152,6 +158,7 @@ function calcularRelatorioNps(pesquisa: NpsPesquisa & { nps_respostas: NpsRespos
     medias,
     pontoForte,
     pontoFraco,
+    comentarios,
   };
 }
 
@@ -325,7 +332,7 @@ export default function TreinadorDashboard({
   const [editandoNpsId, setEditandoNpsId] = useState<string | null>(null);
   const [npsData, setNpsData] = useState(hoje);
   const [npsEnviados, setNpsEnviados] = useState("");
-  const [npsPerguntas, setNpsPerguntas] = useState<string[]>([...NPS_PERGUNTAS_PADRAO]);
+  const [npsPerguntas, setNpsPerguntas] = useState<string[]>(["", "", "", "", "", "", ""]);
   const [salvandoNps, setSalvandoNps] = useState(false);
   const [apagandoNpsId, setApagandoNpsId] = useState<string | null>(null);
 
@@ -333,7 +340,7 @@ export default function TreinadorDashboard({
     setEditandoNpsId(null);
     setNpsData(hoje);
     setNpsEnviados("");
-    setNpsPerguntas([...NPS_PERGUNTAS_PADRAO]);
+    setNpsPerguntas(["", "", "", "", "", "", ""]);
     setShowNpsModal(true);
   }
 
@@ -341,7 +348,7 @@ export default function TreinadorDashboard({
     setEditandoNpsId(item.id);
     setNpsData(item.data);
     setNpsEnviados(item.enviados !== null ? String(item.enviados) : "");
-    setNpsPerguntas(NPS_PERGUNTA_KEYS.map((k) => item[k] || ""));
+    setNpsPerguntas([...NPS_PERGUNTA_KEYS.map((k) => item[k] || ""), item.pergunta7 || ""]);
     setShowNpsModal(true);
   }
 
@@ -352,12 +359,13 @@ export default function TreinadorDashboard({
         treinador_id: treinador.id,
         data: npsData,
         enviados: npsEnviados.trim() === "" ? null : parseInt(npsEnviados, 10) || 0,
-        pergunta1: npsPerguntas[0],
-        pergunta2: npsPerguntas[1],
-        pergunta3: npsPerguntas[2],
-        pergunta4: npsPerguntas[3],
-        pergunta5: npsPerguntas[4],
-        pergunta6: npsPerguntas[5],
+        pergunta1: npsPerguntas[0].trim() || NPS_PERGUNTAS_PADRAO[0],
+        pergunta2: npsPerguntas[1].trim() || NPS_PERGUNTAS_PADRAO[1],
+        pergunta3: npsPerguntas[2].trim() || NPS_PERGUNTAS_PADRAO[2],
+        pergunta4: npsPerguntas[3].trim() || NPS_PERGUNTAS_PADRAO[3],
+        pergunta5: npsPerguntas[4].trim() || NPS_PERGUNTAS_PADRAO[4],
+        pergunta6: npsPerguntas[5].trim() || NPS_PERGUNTAS_PADRAO[5],
+        pergunta7: npsPerguntas[6].trim() || NPS_PERGUNTA7_PADRAO,
       };
 
       if (editandoNpsId) {
@@ -852,6 +860,31 @@ export default function TreinadorDashboard({
                               </p>
                             </div>
                           </div>
+
+                          {relatorio.comentarios.length > 0 && (
+                            <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                              <span className="font-extrabold" style={{ fontSize: 12, color: "#9a9a9f" }}>
+                                COMENTÁRIOS DOS ALUNOS ({relatorio.comentarios.length})
+                              </span>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                                {relatorio.comentarios.map((c, i) => (
+                                  <div
+                                    key={i}
+                                    style={{
+                                      background: "#1a1b1f",
+                                      border: "1px solid rgba(255,255,255,0.08)",
+                                      borderRadius: 8,
+                                      padding: 10,
+                                      fontSize: 13,
+                                      fontStyle: "italic",
+                                    }}
+                                  >
+                                    "{c}"
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1218,10 +1251,62 @@ export default function TreinadorDashboard({
                       setNpsPerguntas((p) => p.map((v, i) => (i === idx ? e.target.value : v)))
                     }
                     style={inputStyle}
-                    placeholder="Escreva a pergunta"
+                    placeholder={NPS_PERGUNTAS_PADRAO[idx]}
                   />
                 </div>
               ))}
+
+              <div
+                style={{
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 10,
+                  padding: 12,
+                  background: "#1a1b1f",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span
+                      className="font-extrabold"
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: "50%",
+                        background: "#ff6a00",
+                        color: "#0d0d0d",
+                        fontSize: 12,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      7
+                    </span>
+                    <span style={{ fontSize: 12, color: "#9a9a9f" }}>Pergunta 7 (opcional)</span>
+                  </div>
+                  <span
+                    className="font-bold"
+                    style={{
+                      fontSize: 11,
+                      color: "#ff6a00",
+                      border: "1px solid rgba(255,106,0,0.4)",
+                      borderRadius: 6,
+                      padding: "2px 8px",
+                    }}
+                  >
+                    Texto livre
+                  </span>
+                </div>
+                <input
+                  value={npsPerguntas[6]}
+                  onChange={(e) =>
+                    setNpsPerguntas((p) => p.map((v, i) => (i === 6 ? e.target.value : v)))
+                  }
+                  style={inputStyle}
+                  placeholder={NPS_PERGUNTA7_PADRAO}
+                />
+              </div>
             </div>
 
             <button
