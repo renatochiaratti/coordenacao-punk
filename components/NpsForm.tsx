@@ -89,7 +89,8 @@ export default function NpsForm({ pesquisa }: { pesquisa: NpsPesquisa }) {
 
         <div>
           <p className="font-bold" style={{ marginBottom: 10 }}>
-            {pesquisa.pergunta7} <span style={{ color: "#9a9a9f", fontWeight: 400 }}>(opcional)</span>
+            {pesquisa.pergunta7 || "Deixe aqui um elogio ou uma sugestão para seu professor…"}{" "}
+            <span style={{ color: "#9a9a9f", fontWeight: 400 }}>(opcional)</span>
           </p>
           <textarea
             value={resposta7}
