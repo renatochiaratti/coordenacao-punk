@@ -183,6 +183,21 @@ const PERGUNTA_AVALIACAO_CATEGORIA: string[] = [
   "presenca", "presenca", "gerenciamento", "demonstracao", "presenca",
 ];
 
+const SCORECARD_SUGESTAO_ATIVIDADE: Record<string, string> = {
+  ensino:
+    "Peça para ele gravar um vídeo curto (2-3 min) explicando um movimento como se fosse para um aluno completamente iniciante, e revisem juntos a clareza da explicação antes da próxima aula.",
+  observacao:
+    "Nas próximas 2 aulas, peça para ele focar em observar e corrigir pelo menos 1 detalhe técnico por aluno durante o WOD, anotando quem corrigiu e o que foi ajustado — depois revisem essa lista juntos.",
+  correcao:
+    "Sugira um exercício de \"triagem rápida\": antes do WOD, peça para ele identificar em voz alta os 2 erros mais comuns que espera ver naquela turma, e confirmar depois se acertou.",
+  gerenciamento:
+    "Peça para ele desenhar (no papel ou digital) o fluxo da aula antes de dar — onde cada grupo fica, como faz a transição entre estações — e testar esse plano na próxima aula.",
+  presenca:
+    "Combine uma meta simples: começar e terminar a aula rigorosamente no horário por 2 semanas seguidas, e registrar isso no checklist para criar o hábito.",
+  demonstracao:
+    "Peça para ele demonstrar o movimento principal do dia sem falar nada por 15 segundos antes de explicar — treina a comunicação visual antes da verbal.",
+};
+
 function calcularAnaliseScorecard(
   resultado: ReturnType<typeof calcularScorecard>,
   avaliacoesAula: AvaliacaoAula[]
@@ -199,11 +214,19 @@ function calcularAnaliseScorecard(
     .filter((idx) => idx !== -1);
 
   const ocorrenciasFalhas: Record<string, number> = {};
+  const ocorrenciasOk: Record<string, number> = {};
+  let totalChecagens = 0;
+
   avaliacoesAula.forEach((av) => {
     indicesRelacionados.forEach((idx) => {
       const item = av.itens[idx];
-      if (item && item.texto.trim() !== "" && !item.ok) {
-        ocorrenciasFalhas[item.texto] = (ocorrenciasFalhas[item.texto] || 0) + 1;
+      if (item && item.texto.trim() !== "") {
+        totalChecagens++;
+        if (!item.ok) {
+          ocorrenciasFalhas[item.texto] = (ocorrenciasFalhas[item.texto] || 0) + 1;
+        } else {
+          ocorrenciasOk[item.texto] = (ocorrenciasOk[item.texto] || 0) + 1;
+        }
       }
     });
   });
@@ -212,7 +235,17 @@ function calcularAnaliseScorecard(
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
 
-  return { categoria: pior, itensProblematicos, totalAvaliacoes: avaliacoesAula.length };
+  const itensConsistentesOk = Object.entries(ocorrenciasOk)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
+  return {
+    categoria: pior,
+    itensProblematicos,
+    itensConsistentesOk,
+    totalChecagens,
+    totalAvaliacoes: avaliacoesAula.length,
+  };
 }
 
 function classificarNpsScore(score: number) {
@@ -1059,10 +1092,34 @@ export default function TreinadorDashboard({
                                     ))}
                                     . Vale focar nisso especificamente no próximo ciclo.
                                   </>
+                                ) : analise.totalChecagens > 0 ? (
+                                  <>
+                                    {" "}Curiosamente, o checklist de avaliação de aula mostra o oposto: {" "}
+                                    {analise.itensConsistentesOk.map(([texto, count], i) => (
+                                      <span key={texto}>
+                                        {i > 0 ? ", " : ""}"{texto}" apareceu OK em {count} de {analise.totalAvaliacoes} avaliações
+                                      </span>
+                                    ))}
+                                    . Isso sugere que o problema não é falta de execução, e sim de profundidade ou consistência — vale conversar diretamente sobre isso no próximo one-on-one, já que o checklist sozinho não está capturando essa nuance.
+                                  </>
                                 ) : (
                                   <> Ainda não há avaliações de aula suficientes que confirmem esse padrão — vale observar de perto nas próximas aulas para confirmar se é algo recorrente.</>
                                 )}
                               </p>
+                              <div
+                                style={{
+                                  marginTop: 10,
+                                  paddingTop: 10,
+                                  borderTop: "1px solid rgba(255,106,0,0.25)",
+                                }}
+                              >
+                                <span className="font-extrabold" style={{ color: "#ff6a00", fontSize: 12 }}>
+                                  ATIVIDADE SUGERIDA
+                                </span>
+                                <p style={{ fontSize: 13, marginTop: 4 }}>
+                                  {SCORECARD_SUGESTAO_ATIVIDADE[analise.categoria.id]}
+                                </p>
+                              </div>
                             </div>
                           );
                         })()}
