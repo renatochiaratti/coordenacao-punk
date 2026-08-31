@@ -8,7 +8,7 @@ import type {
   ChecklistItem,
   AvaliacaoAula,
   AvaliacaoItem,
-  Scorecard,
+  ScorecardAvaliacao,
   Curso,
   Desenvolvimento,
   Escala,
@@ -111,6 +111,72 @@ const NPS_PERGUNTAS_PADRAO = [
 
 const NPS_PERGUNTA7_PADRAO = "Deixe aqui um elogio ou uma sugestão para seu professor…";
 
+const SCORECARD_CATEGORIAS: Record<string, { label: string; cor: string }> = {
+  ensino: { label: "Ensino", cor: "#f5c518" },
+  observacao: { label: "Observação", cor: "#9a9a9f" },
+  correcao: { label: "Correção", cor: "#4a90e2" },
+  gerenciamento: { label: "Gerenciamento de Grupo", cor: "#f0954d" },
+  presenca: { label: "Presença e Atitude", cor: "#1fbf5c" },
+  demonstracao: { label: "Demonstração", cor: "#b19cd9" },
+};
+
+const SCORECARD_ITENS: { id: string; requisito: string; peso: number; categoria: string }[] = [
+  { id: "articular", requisito: "Habilidade de articular", peso: 2, categoria: "ensino" },
+  { id: "instruir", requisito: "Habilidade de instruir", peso: 2, categoria: "ensino" },
+  { id: "mecanica_movimento", requisito: "Conhece mecânica do movimento", peso: 3, categoria: "ensino" },
+  { id: "pontos_desempenho", requisito: "Conhece pontos de desempenho", peso: 3, categoria: "ensino" },
+  { id: "mudar_instrucoes", requisito: "Habilidade de mudar instruções", peso: 2, categoria: "ensino" },
+  { id: "discernimento_estatico", requisito: "Discernimento da mecânica c/i estático", peso: 2, categoria: "observacao" },
+  { id: "discernimento_movimento", requisito: "Discernimento da mecânica c/i movimento", peso: 2, categoria: "observacao" },
+  { id: "melhorar_mecanica", requisito: "Habilidade de melhorar a mecânica visual/verbal/tátil", peso: 2, categoria: "correcao" },
+  { id: "triagem_erros", requisito: "Habilidade de fazer triagem (priorização) de erros", peso: 3, categoria: "correcao" },
+  { id: "gerenciar_aula", requisito: "Habilidade de organizar e gerenciar grupo (aula)", peso: 2, categoria: "gerenciamento" },
+  { id: "gerenciar_academia", requisito: "Habilidade de organizar e gerenciar grupo (academia)", peso: 2, categoria: "gerenciamento" },
+  { id: "ambiente_positivo", requisito: "Habilidade de criar ambiente de aprendizado positivo", peso: 3, categoria: "presenca" },
+  { id: "exemplo_visual", requisito: "Habilidade de fornecer um exemplo visual", peso: 2, categoria: "demonstracao" },
+  { id: "consciencia_movimentos", requisito: "Consciência sobre a mecânica dos seus próprios movimentos", peso: 2, categoria: "demonstracao" },
+];
+
+const SCORECARD_NOTA_LABELS: Record<number, string> = {
+  1: "Insuficiente",
+  2: "Fraco",
+  3: "Médio",
+  4: "Bom",
+  5: "Muito bom",
+};
+
+function classificarScorecardPercentual(percentual: number) {
+  if (percentual >= 90) return { label: "Excelente", cor: "#1fbf5c" };
+  if (percentual >= 75) return { label: "Muito bom", cor: "#8bd450" };
+  if (percentual >= 60) return { label: "Atende", cor: "#f5c518" };
+  return { label: "Abaixo do esperado", cor: "#e5484d" };
+}
+
+function calcularScorecard(avaliacao: ScorecardAvaliacao) {
+  const notas = avaliacao.notas || {};
+  const itensComNota = SCORECARD_ITENS.map((item) => ({
+    ...item,
+    nota: notas[item.id] ?? 0,
+    total: item.peso * (notas[item.id] ?? 0),
+  }));
+
+  const somaTotal = itensComNota.reduce((acc, it) => acc + it.total, 0);
+  const somaPeso = itensComNota.reduce((acc, it) => acc + it.peso, 0);
+  const percentual = somaPeso > 0 ? Math.round((somaTotal / (somaPeso * 5)) * 1000) / 10 : 0;
+  const classificacao = classificarScorecardPercentual(percentual);
+
+  const categorias = Object.entries(SCORECARD_CATEGORIAS).map(([id, info]) => {
+    const itensCat = itensComNota.filter((it) => it.categoria === id);
+    const media =
+      itensCat.length > 0
+        ? Math.round((itensCat.reduce((acc, it) => acc + it.nota, 0) / itensCat.length) * 100) / 100
+        : 0;
+    return { id, label: info.label, cor: info.cor, media };
+  });
+
+  return { itensComNota, somaTotal, somaPeso, percentual, classificacao, categorias };
+}
+
 function classificarNpsScore(score: number) {
   if (score > 75) return { label: "Excelente", cor: "#1fbf5c" };
   if (score >= 50) return { label: "Muito bom", cor: "#8bd450" };
@@ -169,19 +235,19 @@ export default function TreinadorDashboard({
   oneOnOnes,
   checklist,
   avaliacoesAula,
-  scorecards,
   cursos,
   desenvolvimento,
   escalas,
   combinados,
   contratos,
   npsPesquisas,
+  scorecardAvaliacoes,
 }: {
   treinador: Treinador;
   oneOnOnes: OneOnOne[];
   checklist: ChecklistItem[];
   avaliacoesAula: AvaliacaoAula[];
-  scorecards: Scorecard[];
+  scorecardAvaliacoes: ScorecardAvaliacao[];
   cursos: Curso[];
   desenvolvimento: Desenvolvimento[];
   escalas: Escala[];
@@ -195,7 +261,7 @@ export default function TreinadorDashboard({
   const [listaOneOnOnes, setListaOneOnOnes] = useState(oneOnOnes);
   const [listaChecklist, setListaChecklist] = useState(checklist);
   const [listaAvaliacoes, setListaAvaliacoes] = useState(avaliacoesAula);
-  const [listaScorecards, setListaScorecards] = useState(scorecards);
+  const [listaScorecardAvaliacoes, setListaScorecardAvaliacoes] = useState(scorecardAvaliacoes);
   const [listaCursos, setListaCursos] = useState(cursos);
   const [listaDesenvolvimento, setListaDesenvolvimento] = useState(desenvolvimento);
   const [listaEscalas, setListaEscalas] = useState(escalas);
@@ -418,6 +484,103 @@ export default function TreinadorDashboard({
     }
   }
 
+  const [showScorecardModal, setShowScorecardModal] = useState(false);
+  const [editandoScorecardId, setEditandoScorecardId] = useState<string | null>(null);
+  const [scorecardCargo, setScorecardCargo] = useState("");
+  const [scorecardLider, setScorecardLider] = useState("");
+  const [scorecardDataInicio, setScorecardDataInicio] = useState("");
+  const [scorecardDataFinal, setScorecardDataFinal] = useState(hoje);
+  const [scorecardNotas, setScorecardNotas] = useState<Record<string, string>>({});
+  const [scorecardComentarioColaborador, setScorecardComentarioColaborador] = useState("");
+  const [scorecardAcoesColaborador, setScorecardAcoesColaborador] = useState("");
+  const [scorecardAcoesLider, setScorecardAcoesLider] = useState("");
+  const [salvandoScorecard, setSalvandoScorecard] = useState(false);
+  const [apagandoScorecardId, setApagandoScorecardId] = useState<string | null>(null);
+
+  function abrirScorecardModal() {
+    setEditandoScorecardId(null);
+    setScorecardCargo("Professor");
+    setScorecardLider("");
+    setScorecardDataInicio("");
+    setScorecardDataFinal(hoje);
+    setScorecardNotas({});
+    setScorecardComentarioColaborador("");
+    setScorecardAcoesColaborador("");
+    setScorecardAcoesLider("");
+    setShowScorecardModal(true);
+  }
+
+  function abrirEdicaoScorecard(item: ScorecardAvaliacao) {
+    setEditandoScorecardId(item.id);
+    setScorecardCargo(item.cargo || "");
+    setScorecardLider(item.lider || "");
+    setScorecardDataInicio(item.data_inicio || "");
+    setScorecardDataFinal(item.data_final || hoje);
+    const notasStr: Record<string, string> = {};
+    SCORECARD_ITENS.forEach((it) => {
+      notasStr[it.id] = item.notas?.[it.id] ? String(item.notas[it.id]) : "";
+    });
+    setScorecardNotas(notasStr);
+    setScorecardComentarioColaborador(item.comentario_colaborador || "");
+    setScorecardAcoesColaborador(item.acoes_colaborador || "");
+    setScorecardAcoesLider(item.acoes_lider || "");
+    setShowScorecardModal(true);
+  }
+
+  async function salvarScorecard() {
+    setSalvandoScorecard(true);
+    try {
+      const notasNum: Record<string, number> = {};
+      SCORECARD_ITENS.forEach((it) => {
+        const v = parseInt(scorecardNotas[it.id] || "0", 10);
+        notasNum[it.id] = v >= 1 && v <= 5 ? v : 0;
+      });
+
+      const payload = {
+        treinador_id: treinador.id,
+        cargo: scorecardCargo || null,
+        lider: scorecardLider || null,
+        data_inicio: scorecardDataInicio || null,
+        data_final: scorecardDataFinal || null,
+        notas: notasNum,
+        comentario_colaborador: scorecardComentarioColaborador || null,
+        acoes_colaborador: scorecardAcoesColaborador || null,
+        acoes_lider: scorecardAcoesLider || null,
+      };
+
+      if (editandoScorecardId) {
+        const { error } = await supabase.from("scorecard_avaliacoes").update(payload).eq("id", editandoScorecardId);
+        if (error) {
+          alert("Não foi possível salvar o ScoreCard: " + error.message);
+          return;
+        }
+        setListaScorecardAvaliacoes((p) => p.map((x) => (x.id === editandoScorecardId ? { ...x, ...payload } : x)));
+      } else {
+        const { data, error } = await supabase.from("scorecard_avaliacoes").insert(payload).select().single();
+        if (error) {
+          alert("Não foi possível salvar o ScoreCard: " + error.message);
+          return;
+        }
+        if (data) setListaScorecardAvaliacoes((p) => [data as ScorecardAvaliacao, ...p]);
+      }
+      setShowScorecardModal(false);
+      setEditandoScorecardId(null);
+    } finally {
+      setSalvandoScorecard(false);
+    }
+  }
+
+  async function apagarScorecard(item: ScorecardAvaliacao) {
+    if (!confirm("Apagar este ScoreCard?")) return;
+    setApagandoScorecardId(item.id);
+    try {
+      const { error } = await supabase.from("scorecard_avaliacoes").delete().eq("id", item.id);
+      if (!error) setListaScorecardAvaliacoes((p) => p.filter((x) => x.id !== item.id));
+    } finally {
+      setApagandoScorecardId(null);
+    }
+  }
+
   function abrirModal() {
     setFData(hoje);
     setFTexto1("");
@@ -451,13 +614,6 @@ export default function TreinadorDashboard({
           .select()
           .single();
         if (!error && data) setListaChecklist((p) => [data as ChecklistItem, ...p]);
-      } else if (aba === "ScoreCard") {
-        const { data, error } = await supabase
-          .from("scorecards")
-          .insert({ treinador_id: treinador.id, data: fData, competencia: fTexto1, nota: parseFloat(fNumero.replace(",", ".")) || 0 })
-          .select()
-          .single();
-        if (!error && data) setListaScorecards((p) => [data as Scorecard, ...p]);
       } else if (aba === "Cursos") {
         const { data, error } = await supabase
           .from("cursos")
@@ -547,7 +703,7 @@ export default function TreinadorDashboard({
         ))}
       </div>
 
-      {aba !== "Checklist Aulas" && aba !== "NPS" && (
+      {aba !== "Checklist Aulas" && aba !== "NPS" && aba !== "ScoreCard" && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
           <button
             onClick={abrirModal}
@@ -723,10 +879,141 @@ export default function TreinadorDashboard({
         )}
 
         {aba === "ScoreCard" && (
-          <Lista
-            vazio="Nenhuma avaliação registrada ainda."
-            itens={listaScorecards.map((s) => ({ id: s.id, titulo: s.competencia, corpo: fmtDate(s.data), extra: s.nota.toFixed(1) }))}
-          />
+          <div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+              <button
+                onClick={abrirScorecardModal}
+                className="font-bold"
+                style={{ background: "#ff6a00", color: "#0d0d0d", padding: "8px 16px", borderRadius: 8 }}
+              >
+                + Nova avaliação
+              </button>
+            </div>
+
+            {listaScorecardAvaliacoes.length === 0 ? (
+              <p style={{ color: "#9a9a9f", textAlign: "center", padding: 20 }}>Nenhum ScoreCard registrado ainda.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {[...listaScorecardAvaliacoes]
+                  .sort((a, b) => (b.data_final || "").localeCompare(a.data_final || ""))
+                  .map((item) => {
+                  const resultado = calcularScorecard(item);
+                  return (
+                    <div key={item.id} style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div>
+                          <div className="font-bold">
+                            {item.data_inicio ? `${fmtDate(item.data_inicio)} — ` : ""}{fmtDate(item.data_final || "")}
+                          </div>
+                          <div style={{ color: "#9a9a9f", fontSize: 13, marginTop: 2 }}>
+                            {[item.cargo, item.lider ? `Líder: ${item.lider}` : ""].filter(Boolean).join(" · ")}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            onClick={() => abrirEdicaoScorecard(item)}
+                            title="Editar"
+                            style={{ background: "transparent", border: "none", fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1 }}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => apagarScorecard(item)}
+                            disabled={apagandoScorecardId === item.id}
+                            title="Apagar"
+                            style={{ color: "#ff5a5a", background: "transparent", border: "none", fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1 }}
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                          <span className="font-bold" style={{ fontSize: 13 }}>Total geral</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span className="font-extrabold" style={{ color: "#ff6a00", fontSize: 18 }}>{resultado.percentual}%</span>
+                            <span
+                              className="font-extrabold"
+                              style={{ background: resultado.classificacao.cor, color: "#0d0d0d", padding: "2px 8px", borderRadius: 6, fontSize: 12 }}
+                            >
+                              {resultado.classificacao.label}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 }}>
+                          {resultado.categorias.map((cat) => (
+                            <div
+                              key={cat.id}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                fontSize: 13,
+                                padding: "4px 8px",
+                                borderRadius: 6,
+                                background: cat.cor + "22",
+                              }}
+                            >
+                              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: "50%", background: cat.cor, display: "inline-block" }} />
+                                {cat.label}
+                              </span>
+                              <span className="font-extrabold" style={{ color: cat.cor }}>{cat.media}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {resultado.itensComNota.map((it) => (
+                            <div
+                              key={it.id}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                fontSize: 12,
+                                padding: "3px 0",
+                                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                                color: "#9a9a9f",
+                              }}
+                            >
+                              <span>{it.requisito}</span>
+                              <span>{it.nota > 0 ? `${it.nota} · ${SCORECARD_NOTA_LABELS[it.nota]}` : "—"}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {(item.comentario_colaborador || item.acoes_colaborador || item.acoes_lider) && (
+                          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                            {item.comentario_colaborador && (
+                              <div style={{ background: "#1a1b1f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 10 }}>
+                                <span className="font-extrabold" style={{ fontSize: 12, color: "#9a9a9f" }}>COMENTÁRIO DO COLABORADOR</span>
+                                <p style={{ fontSize: 13, marginTop: 4, whiteSpace: "pre-wrap" }}>{item.comentario_colaborador}</p>
+                              </div>
+                            )}
+                            {item.acoes_colaborador && (
+                              <div style={{ background: "#1a1b1f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 10 }}>
+                                <span className="font-extrabold" style={{ fontSize: 12, color: "#9a9a9f" }}>AÇÕES DO COLABORADOR</span>
+                                <p style={{ fontSize: 13, marginTop: 4, whiteSpace: "pre-wrap" }}>{item.acoes_colaborador}</p>
+                              </div>
+                            )}
+                            {item.acoes_lider && (
+                              <div style={{ background: "#1a1b1f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 10 }}>
+                                <span className="font-extrabold" style={{ fontSize: 12, color: "#9a9a9f" }}>AÇÕES DO LÍDER</span>
+                                <p style={{ fontSize: 13, marginTop: 4, whiteSpace: "pre-wrap" }}>{item.acoes_lider}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
 
         {aba === "NPS" && (
@@ -1014,14 +1301,6 @@ export default function TreinadorDashboard({
               <>
                 <Campo label="Data"><input type="date" value={fData} onChange={(e) => setFData(e.target.value)} style={inputStyle} /></Campo>
                 <Campo label="Item"><input value={fTexto1} onChange={(e) => setFTexto1(e.target.value)} style={inputStyle} placeholder="Ex: Alongamento no início da aula" /></Campo>
-              </>
-            )}
-
-            {aba === "ScoreCard" && (
-              <>
-                <Campo label="Data"><input type="date" value={fData} onChange={(e) => setFData(e.target.value)} style={inputStyle} /></Campo>
-                <Campo label="Competência"><input value={fTexto1} onChange={(e) => setFTexto1(e.target.value)} style={inputStyle} placeholder="Ex: Didática" /></Campo>
-                <Campo label="Nota"><input value={fNumero} onChange={(e) => setFNumero(e.target.value)} style={inputStyle} placeholder="Ex: 8.5" inputMode="decimal" /></Campo>
               </>
             )}
 
@@ -1318,6 +1597,105 @@ export default function TreinadorDashboard({
               style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8, marginTop: 16 }}
             >
               {salvandoNps ? "Salvando..." : editandoNpsId ? "Salvar edição" : "Salvar pesquisa"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showScorecardModal && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }}
+          onClick={() => setShowScorecardModal(false)}
+        >
+          <div
+            className="card"
+            style={{ padding: 24, width: 560, maxWidth: "100%", maxHeight: "85vh", overflowY: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-extrabold" style={{ textAlign: "center" }}>
+              {editandoScorecardId ? "Editar ScoreCard" : "Novo ScoreCard"}
+            </h3>
+
+            <div style={{ display: "flex", gap: 10, margin: "16px 0" }}>
+              <div style={{ flex: 1 }}>
+                <Campo label="Cargo"><input value={scorecardCargo} onChange={(e) => setScorecardCargo(e.target.value)} style={inputStyle} placeholder="Ex: Professor" /></Campo>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Campo label="Líder"><input value={scorecardLider} onChange={(e) => setScorecardLider(e.target.value)} style={inputStyle} placeholder="Ex: Renato / Mateus" /></Campo>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <Campo label="Início do período"><input type="date" value={scorecardDataInicio} onChange={(e) => setScorecardDataInicio(e.target.value)} style={inputStyle} /></Campo>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Campo label="Final do período"><input type="date" value={scorecardDataFinal} onChange={(e) => setScorecardDataFinal(e.target.value)} style={inputStyle} /></Campo>
+              </div>
+            </div>
+
+            {Object.entries(SCORECARD_CATEGORIAS).map(([catId, catInfo]) => (
+              <div key={catId} style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: catInfo.cor, display: "inline-block" }} />
+                  <span className="font-extrabold" style={{ fontSize: 13 }}>{catInfo.label}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {SCORECARD_ITENS.filter((it) => it.categoria === catId).map((it) => (
+                    <div
+                      key={it.id}
+                      style={{
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 10,
+                        padding: 10,
+                        background: "#1a1b1f",
+                      }}
+                    >
+                      <div style={{ fontSize: 13, marginBottom: 6 }}>{it.requisito} <span style={{ color: "#9a9a9f", fontSize: 11 }}>(peso {it.peso})</span></div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setScorecardNotas((p) => ({ ...p, [it.id]: String(n) }))}
+                            title={SCORECARD_NOTA_LABELS[n]}
+                            style={{
+                              flex: 1,
+                              padding: "8px 0",
+                              borderRadius: 8,
+                              border: "none",
+                              cursor: "pointer",
+                              fontWeight: 700,
+                              background: scorecardNotas[it.id] === String(n) ? catInfo.cor : "#26272c",
+                              color: scorecardNotas[it.id] === String(n) ? "#0d0d0d" : "#f2f2f0",
+                            }}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <Campo label="Comentários do colaborador avaliado">
+              <textarea value={scorecardComentarioColaborador} onChange={(e) => setScorecardComentarioColaborador(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} />
+            </Campo>
+            <Campo label="Espaço reservado ao colaborador — ações a serem desenvolvidas">
+              <textarea value={scorecardAcoesColaborador} onChange={(e) => setScorecardAcoesColaborador(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} />
+            </Campo>
+            <Campo label="Espaço reservado ao líder — ações a serem desenvolvidas">
+              <textarea value={scorecardAcoesLider} onChange={(e) => setScorecardAcoesLider(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} />
+            </Campo>
+
+            <button
+              onClick={salvarScorecard}
+              disabled={salvandoScorecard}
+              className="font-bold"
+              style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8, marginTop: 8 }}
+            >
+              {salvandoScorecard ? "Salvando..." : editandoScorecardId ? "Salvar edição" : "Salvar ScoreCard"}
             </button>
           </div>
         </div>
