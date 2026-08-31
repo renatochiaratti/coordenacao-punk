@@ -13,12 +13,12 @@ export default async function TreinadorPage({ params }: { params: { token: strin
 
   if (!treinador) return notFound();
 
-  const [oneOnOnes, checklist, avaliacoesAula, scorecards, cursos, desenvolvimento, escalas, combinados, contratos, npsPesquisas] =
+  const [oneOnOnes, checklist, avaliacoesAula, scorecardAvaliacoes, cursos, desenvolvimento, escalas, combinados, contratos, npsPesquisas] =
     await Promise.all([
       supabase.from("one_on_ones").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
       supabase.from("checklist_aulas").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
       supabase.from("avaliacoes_aula").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
-      supabase.from("scorecards").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
+      supabase.from("scorecard_avaliacoes").select("*").eq("treinador_id", treinador.id).order("data_final", { ascending: false }),
       supabase.from("cursos").select("*").eq("treinador_id", treinador.id).order("created_at", { ascending: false }),
       supabase.from("desenvolvimento").select("*").eq("treinador_id", treinador.id).order("created_at", { ascending: false }),
       supabase.from("escalas").select("*").eq("treinador_id", treinador.id),
@@ -33,7 +33,7 @@ export default async function TreinadorPage({ params }: { params: { token: strin
       oneOnOnes={oneOnOnes.data || []}
       checklist={checklist.data || []}
       avaliacoesAula={avaliacoesAula.data || []}
-      scorecards={scorecards.data || []}
+      scorecardAvaliacoes={scorecardAvaliacoes.data || []}
       cursos={cursos.data || []}
       desenvolvimento={desenvolvimento.data || []}
       escalas={escalas.data || []}
