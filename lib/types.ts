@@ -48,6 +48,20 @@ export type Scorecard = {
   nota: number;
 };
 
+export type ScorecardAvaliacao = {
+  id: string;
+  treinador_id: string;
+  cargo: string | null;
+  lider: string | null;
+  data_inicio: string | null;
+  data_final: string | null;
+  notas: Record<string, number>;
+  comentario_colaborador: string | null;
+  acoes_colaborador: string | null;
+  acoes_lider: string | null;
+  created_at: string;
+};
+
 export type Curso = {
   id: string;
   treinador_id: string;
