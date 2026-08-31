@@ -177,6 +177,44 @@ function calcularScorecard(avaliacao: ScorecardAvaliacao) {
   return { itensComNota, somaTotal, somaPeso, percentual, classificacao, categorias };
 }
 
+const PERGUNTA_AVALIACAO_CATEGORIA: string[] = [
+  "presenca", "ensino", "ensino", "ensino", "ensino", "gerenciamento", "ensino", "ensino",
+  "correcao", "demonstracao", "gerenciamento", "correcao", "ensino", "ensino", "presenca",
+  "presenca", "presenca", "gerenciamento", "demonstracao", "presenca",
+];
+
+function calcularAnaliseScorecard(
+  resultado: ReturnType<typeof calcularScorecard>,
+  avaliacoesAula: AvaliacaoAula[]
+) {
+  if (resultado.somaPeso === 0) return null;
+
+  let pior = resultado.categorias[0];
+  resultado.categorias.forEach((c) => {
+    if (c.media < pior.media) pior = c;
+  });
+
+  const indicesRelacionados = PERGUNTA_AVALIACAO_CATEGORIA
+    .map((cat, idx) => (cat === pior.id ? idx : -1))
+    .filter((idx) => idx !== -1);
+
+  const ocorrenciasFalhas: Record<string, number> = {};
+  avaliacoesAula.forEach((av) => {
+    indicesRelacionados.forEach((idx) => {
+      const item = av.itens[idx];
+      if (item && item.texto.trim() !== "" && !item.ok) {
+        ocorrenciasFalhas[item.texto] = (ocorrenciasFalhas[item.texto] || 0) + 1;
+      }
+    });
+  });
+
+  const itensProblematicos = Object.entries(ocorrenciasFalhas)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
+  return { categoria: pior, itensProblematicos, totalAvaliacoes: avaliacoesAula.length };
+}
+
 function classificarNpsScore(score: number) {
   if (score > 75) return { label: "Excelente", cor: "#1fbf5c" };
   if (score >= 50) return { label: "Muito bom", cor: "#8bd450" };
@@ -488,12 +526,9 @@ export default function TreinadorDashboard({
   const [editandoScorecardId, setEditandoScorecardId] = useState<string | null>(null);
   const [scorecardCargo, setScorecardCargo] = useState("");
   const [scorecardLider, setScorecardLider] = useState("");
-  const [scorecardDataInicio, setScorecardDataInicio] = useState("");
   const [scorecardDataFinal, setScorecardDataFinal] = useState(hoje);
   const [scorecardNotas, setScorecardNotas] = useState<Record<string, string>>({});
-  const [scorecardComentarioColaborador, setScorecardComentarioColaborador] = useState("");
-  const [scorecardAcoesColaborador, setScorecardAcoesColaborador] = useState("");
-  const [scorecardAcoesLider, setScorecardAcoesLider] = useState("");
+  const [scorecardAnotacoes, setScorecardAnotacoes] = useState("");
   const [salvandoScorecard, setSalvandoScorecard] = useState(false);
   const [apagandoScorecardId, setApagandoScorecardId] = useState<string | null>(null);
 
@@ -501,12 +536,9 @@ export default function TreinadorDashboard({
     setEditandoScorecardId(null);
     setScorecardCargo("Professor");
     setScorecardLider("");
-    setScorecardDataInicio("");
     setScorecardDataFinal(hoje);
     setScorecardNotas({});
-    setScorecardComentarioColaborador("");
-    setScorecardAcoesColaborador("");
-    setScorecardAcoesLider("");
+    setScorecardAnotacoes("");
     setShowScorecardModal(true);
   }
 
@@ -514,16 +546,13 @@ export default function TreinadorDashboard({
     setEditandoScorecardId(item.id);
     setScorecardCargo(item.cargo || "");
     setScorecardLider(item.lider || "");
-    setScorecardDataInicio(item.data_inicio || "");
     setScorecardDataFinal(item.data_final || hoje);
     const notasStr: Record<string, string> = {};
     SCORECARD_ITENS.forEach((it) => {
       notasStr[it.id] = item.notas?.[it.id] ? String(item.notas[it.id]) : "";
     });
     setScorecardNotas(notasStr);
-    setScorecardComentarioColaborador(item.comentario_colaborador || "");
-    setScorecardAcoesColaborador(item.acoes_colaborador || "");
-    setScorecardAcoesLider(item.acoes_lider || "");
+    setScorecardAnotacoes(item.comentario_colaborador || "");
     setShowScorecardModal(true);
   }
 
@@ -540,12 +569,12 @@ export default function TreinadorDashboard({
         treinador_id: treinador.id,
         cargo: scorecardCargo || null,
         lider: scorecardLider || null,
-        data_inicio: scorecardDataInicio || null,
+        data_inicio: null,
         data_final: scorecardDataFinal || null,
         notas: notasNum,
-        comentario_colaborador: scorecardComentarioColaborador || null,
-        acoes_colaborador: scorecardAcoesColaborador || null,
-        acoes_lider: scorecardAcoesLider || null,
+        comentario_colaborador: scorecardAnotacoes || null,
+        acoes_colaborador: null,
+        acoes_lider: null,
       };
 
       if (editandoScorecardId) {
@@ -902,9 +931,7 @@ export default function TreinadorDashboard({
                     <div key={item.id} style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 14 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                         <div>
-                          <div className="font-bold">
-                            {item.data_inicio ? `${fmtDate(item.data_inicio)} — ` : ""}{fmtDate(item.data_final || "")}
-                          </div>
+                          <div className="font-bold">{fmtDate(item.data_final || "")}</div>
                           <div style={{ color: "#9a9a9f", fontSize: 13, marginTop: 2 }}>
                             {[item.cargo, item.lider ? `Líder: ${item.lider}` : ""].filter(Boolean).join(" · ")}
                           </div>
@@ -979,34 +1006,66 @@ export default function TreinadorDashboard({
                                 color: "#9a9a9f",
                               }}
                             >
-                              <span>{it.requisito}</span>
+                              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span
+                                  style={{
+                                    width: 7,
+                                    height: 7,
+                                    borderRadius: "50%",
+                                    background: SCORECARD_CATEGORIAS[it.categoria].cor,
+                                    display: "inline-block",
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                {it.requisito}
+                              </span>
                               <span>{it.nota > 0 ? `${it.nota} · ${SCORECARD_NOTA_LABELS[it.nota]}` : "—"}</span>
                             </div>
                           ))}
                         </div>
 
-                        {(item.comentario_colaborador || item.acoes_colaborador || item.acoes_lider) && (
-                          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                            {item.comentario_colaborador && (
-                              <div style={{ background: "#1a1b1f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 10 }}>
-                                <span className="font-extrabold" style={{ fontSize: 12, color: "#9a9a9f" }}>COMENTÁRIO DO COLABORADOR</span>
-                                <p style={{ fontSize: 13, marginTop: 4, whiteSpace: "pre-wrap" }}>{item.comentario_colaborador}</p>
-                              </div>
-                            )}
-                            {item.acoes_colaborador && (
-                              <div style={{ background: "#1a1b1f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 10 }}>
-                                <span className="font-extrabold" style={{ fontSize: 12, color: "#9a9a9f" }}>AÇÕES DO COLABORADOR</span>
-                                <p style={{ fontSize: 13, marginTop: 4, whiteSpace: "pre-wrap" }}>{item.acoes_colaborador}</p>
-                              </div>
-                            )}
-                            {item.acoes_lider && (
-                              <div style={{ background: "#1a1b1f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 10 }}>
-                                <span className="font-extrabold" style={{ fontSize: 12, color: "#9a9a9f" }}>AÇÕES DO LÍDER</span>
-                                <p style={{ fontSize: 13, marginTop: 4, whiteSpace: "pre-wrap" }}>{item.acoes_lider}</p>
-                              </div>
-                            )}
+                        {item.comentario_colaborador && (
+                          <div style={{ marginTop: 12, background: "#1a1b1f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 10 }}>
+                            <span className="font-extrabold" style={{ fontSize: 12, color: "#9a9a9f" }}>MINHAS ANOTAÇÕES</span>
+                            <p style={{ fontSize: 13, marginTop: 4, whiteSpace: "pre-wrap" }}>{item.comentario_colaborador}</p>
                           </div>
                         )}
+
+                        {(() => {
+                          const analise = calcularAnaliseScorecard(resultado, listaAvaliacoes);
+                          if (!analise) return null;
+                          return (
+                            <div
+                              style={{
+                                marginTop: 12,
+                                background: "rgba(255,106,0,0.1)",
+                                border: "1px solid rgba(255,106,0,0.3)",
+                                borderRadius: 8,
+                                padding: 10,
+                              }}
+                            >
+                              <span className="font-extrabold" style={{ color: "#ff6a00", fontSize: 12 }}>
+                                PONTO DE MELHORA PARA A PRÓXIMA ETAPA
+                              </span>
+                              <p style={{ fontSize: 13, marginTop: 6 }}>
+                                O ponto mais frágil dessa avaliação foi <strong>{analise.categoria.label}</strong> (média {analise.categoria.media}).
+                                {analise.itensProblematicos.length > 0 ? (
+                                  <>
+                                    {" "}Isso é consistente com o checklist de avaliação de aula: nas avaliações registradas, esses itens relacionados apareceram marcados como pendentes com frequência —{" "}
+                                    {analise.itensProblematicos.map(([texto, count], i) => (
+                                      <span key={texto}>
+                                        {i > 0 ? ", " : ""}"{texto}" ({count}x)
+                                      </span>
+                                    ))}
+                                    . Vale focar nisso especificamente no próximo ciclo.
+                                  </>
+                                ) : (
+                                  <> Ainda não há avaliações de aula suficientes que confirmem esse padrão — vale observar de perto nas próximas aulas para confirmar se é algo recorrente.</>
+                                )}
+                              </p>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -1625,14 +1684,7 @@ export default function TreinadorDashboard({
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-              <div style={{ flex: 1 }}>
-                <Campo label="Início do período"><input type="date" value={scorecardDataInicio} onChange={(e) => setScorecardDataInicio(e.target.value)} style={inputStyle} /></Campo>
-              </div>
-              <div style={{ flex: 1 }}>
-                <Campo label="Final do período"><input type="date" value={scorecardDataFinal} onChange={(e) => setScorecardDataFinal(e.target.value)} style={inputStyle} /></Campo>
-              </div>
-            </div>
+            <Campo label="Data"><input type="date" value={scorecardDataFinal} onChange={(e) => setScorecardDataFinal(e.target.value)} style={inputStyle} /></Campo>
 
             {Object.entries(SCORECARD_CATEGORIAS).map(([catId, catInfo]) => (
               <div key={catId} style={{ marginBottom: 16 }}>
@@ -1679,14 +1731,8 @@ export default function TreinadorDashboard({
               </div>
             ))}
 
-            <Campo label="Comentários do colaborador avaliado">
-              <textarea value={scorecardComentarioColaborador} onChange={(e) => setScorecardComentarioColaborador(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} />
-            </Campo>
-            <Campo label="Espaço reservado ao colaborador — ações a serem desenvolvidas">
-              <textarea value={scorecardAcoesColaborador} onChange={(e) => setScorecardAcoesColaborador(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} />
-            </Campo>
-            <Campo label="Espaço reservado ao líder — ações a serem desenvolvidas">
-              <textarea value={scorecardAcoesLider} onChange={(e) => setScorecardAcoesLider(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} />
+            <Campo label="Minhas anotações">
+              <textarea value={scorecardAnotacoes} onChange={(e) => setScorecardAnotacoes(e.target.value)} style={{ ...inputStyle, minHeight: 90 }} placeholder="Observações livres sobre essa avaliação..." />
             </Campo>
 
             <button
