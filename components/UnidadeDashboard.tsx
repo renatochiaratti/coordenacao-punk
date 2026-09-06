@@ -18,6 +18,30 @@ function proximaCor(atual: string) {
   return ORDEM_CORES[(idx + 1) % ORDEM_CORES.length];
 }
 
+function normalizarNome(nome: string) {
+  return nome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+const FOTOS_CONHECIDAS = ["maranhao", "robson", "igor", "renato", "guilherme", "roanny"];
+
+function fotoDoTreinador(nome: string): string | null {
+  const normalizado = normalizarNome(nome);
+  const encontrado = FOTOS_CONHECIDAS.find((f) => normalizado.includes(f) || f.includes(normalizado));
+  return encontrado ? `/treinadores/${encontrado}.jpg` : null;
+}
+
+const CORES_FALLBACK = [
+  "linear-gradient(135deg, #ff6a00, #b34700)",
+  "linear-gradient(135deg, #1fbf5c, #0d5c2b)",
+  "linear-gradient(135deg, #4a90e2, #1a3a63)",
+  "linear-gradient(135deg, #b19cd9, #4a3d63)",
+  "linear-gradient(135deg, #f5c518, #7a600b)",
+];
+
 type Secao = "menu" | "professores" | "diaria" | "anual";
 
 export default function UnidadeDashboard({
@@ -233,40 +257,77 @@ export default function UnidadeDashboard({
       )}
 
       {secao === "professores" && (
-        <div className="card" style={{ overflow: "hidden" }}>
-          {listaTreinadores.map((t, i) => (
-            <div
-              key={t.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "14px 18px",
-                borderBottom: i < listaTreinadores.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none",
-                gap: 12,
-              }}
-            >
-              <a href={`/treinador/${t.token}`} style={{ flex: 1, textDecoration: "none", color: "#f2f2f0" }}>
-                <span className="font-bold">{t.nome}</span>
-              </a>
-              <button
-                onClick={() => abrirEdicao(t)}
-                aria-label="Editar treinador"
-                style={{
-                  background: "#1f2024",
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  borderRadius: 8,
-                  padding: "6px 12px",
-                  color: "#f2f2f0",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                }}
-              >
-                Editar
-              </button>
-            </div>
-          ))}
+        <div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+              gap: 12,
+              marginBottom: 16,
+            }}
+          >
+            {listaTreinadores.map((t, i) => {
+              const foto = fotoDoTreinador(t.nome);
+              const inicial = t.nome.trim().charAt(0).toUpperCase();
+              return (
+                <div key={t.id} style={{ position: "relative" }}>
+                  <a
+                    href={`/treinador/${t.token}`}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "flex-end",
+                      aspectRatio: "4 / 5",
+                      borderRadius: 14,
+                      padding: 12,
+                      textDecoration: "none",
+                      backgroundImage: foto ? `linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%), url(${foto})` : CORES_FALLBACK[i % CORES_FALLBACK.length],
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                      boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+                    }}
+                  >
+                    {!foto && (
+                      <span
+                        className="font-extrabold"
+                        style={{
+                          fontSize: 40,
+                          color: "rgba(255,255,255,0.35)",
+                          position: "absolute",
+                          top: 16,
+                          left: 16,
+                        }}
+                      >
+                        {inicial}
+                      </span>
+                    )}
+                    <span className="font-extrabold" style={{ fontSize: 15, color: "#fff" }}>
+                      {t.nome}
+                    </span>
+                  </a>
+                  <button
+                    onClick={() => abrirEdicao(t)}
+                    aria-label="Editar treinador"
+                    style={{
+                      position: "absolute",
+                      top: 8,
+                      right: 8,
+                      background: "rgba(13,13,13,0.6)",
+                      border: "1px solid rgba(255,255,255,0.25)",
+                      borderRadius: 8,
+                      padding: "4px 8px",
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Editar
+                  </button>
+                </div>
+              );
+            })}
+          </div>
           {listaTreinadores.length === 0 && (
             <div style={{ padding: 20, color: "#9a9a9f", textAlign: "center" }}>Nenhum treinador nessa unidade ainda.</div>
           )}
