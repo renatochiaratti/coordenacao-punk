@@ -11,7 +11,6 @@ import type {
   ScorecardAvaliacao,
   Curso,
   Desenvolvimento,
-  Escala,
   Combinado,
   Contrato,
   NpsPesquisa,
@@ -43,11 +42,6 @@ const PERGUNTAS_AVALIACAO = [
 
 const TOTAL_ITENS_AVALIACAO = PERGUNTAS_AVALIACAO.length;
 
-const DIA_LABEL: Record<string, string> = {
-  segunda: "Seg", terca: "Ter", quarta: "Qua", quinta: "Qui", sexta: "Sex", sabado: "Sáb", domingo: "Dom",
-};
-const DIAS = ["segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"] as const;
-
 const ABAS = [
   "One-on-One",
   "Checklist Aulas",
@@ -55,7 +49,6 @@ const ABAS = [
   "NPS",
   "Cursos",
   "Desenvolvimento",
-  "Escala",
   "Combinados",
   "Contrato",
 ] as const;
@@ -308,7 +301,6 @@ export default function TreinadorDashboard({
   avaliacoesAula,
   cursos,
   desenvolvimento,
-  escalas,
   combinados,
   contratos,
   npsPesquisas,
@@ -321,7 +313,6 @@ export default function TreinadorDashboard({
   scorecardAvaliacoes: ScorecardAvaliacao[];
   cursos: Curso[];
   desenvolvimento: Desenvolvimento[];
-  escalas: Escala[];
   combinados: Combinado[];
   contratos: Contrato[];
   npsPesquisas: (NpsPesquisa & { nps_respostas: NpsResposta[] })[];
@@ -335,7 +326,6 @@ export default function TreinadorDashboard({
   const [listaScorecardAvaliacoes, setListaScorecardAvaliacoes] = useState(scorecardAvaliacoes);
   const [listaCursos, setListaCursos] = useState(cursos);
   const [listaDesenvolvimento, setListaDesenvolvimento] = useState(desenvolvimento);
-  const [listaEscalas, setListaEscalas] = useState(escalas);
   const [listaCombinados, setListaCombinados] = useState(combinados);
   const [listaContratos, setListaContratos] = useState(contratos);
   const [listaPesquisas, setListaPesquisas] = useState(npsPesquisas);
@@ -349,7 +339,9 @@ export default function TreinadorDashboard({
   const [fNumero, setFNumero] = useState("");
   const [fSelect, setFSelect] = useState("");
   const [fData2, setFData2] = useState("");
-  const [fHorario, setFHorario] = useState("06:00");
+  const [oocComecar, setOocComecar] = useState("");
+  const [oocParar, setOocParar] = useState("");
+  const [oocContinuar, setOocContinuar] = useState("");
   const [salvando, setSalvando] = useState(false);
 
   const [respostaDrafts, setRespostaDrafts] = useState<Record<string, string>>({});
@@ -649,12 +641,13 @@ export default function TreinadorDashboard({
     setFTexto2("");
     setFNumero("");
     setFData2("");
-    setFHorario("06:00");
+    setOocComecar("");
+    setOocParar("");
+    setOocContinuar("");
     setFSelect(
       aba === "Cursos" ? "x" :
       aba === "Desenvolvimento" ? "nao_iniciado" :
-      aba === "Combinados" ? "em_dia" :
-      aba === "Escala" ? "segunda" : ""
+      aba === "Combinados" ? "em_dia" : ""
     );
     setShowModal(true);
   }
@@ -663,9 +656,14 @@ export default function TreinadorDashboard({
     setSalvando(true);
     try {
       if (aba === "One-on-One") {
+        const linhasCpc = [
+          oocComecar.trim() ? `- Começar: ${oocComecar.trim()}` : "",
+          oocParar.trim() ? `- Parar: ${oocParar.trim()}` : "",
+          oocContinuar.trim() ? `- Continuar: ${oocContinuar.trim()}` : "",
+        ].filter(Boolean);
         const { data, error } = await supabase
           .from("one_on_ones")
-          .insert({ treinador_id: treinador.id, data: fData, topicos: fTexto1 || null, observacoes: fTexto2 || null })
+          .insert({ treinador_id: treinador.id, data: fData, topicos: linhasCpc.length > 0 ? linhasCpc.join("\n") : null, observacoes: null })
           .select()
           .single();
         if (!error && data) setListaOneOnOnes((p) => [data as OneOnOne, ...p]);
@@ -690,13 +688,6 @@ export default function TreinadorDashboard({
           .select()
           .single();
         if (!error && data) setListaDesenvolvimento((p) => [data as Desenvolvimento, ...p]);
-      } else if (aba === "Escala") {
-        const { data, error } = await supabase
-          .from("escalas")
-          .insert({ treinador_id: treinador.id, dia_semana: fSelect, horario: fHorario, turma: fTexto1 || null })
-          .select()
-          .single();
-        if (!error && data) setListaEscalas((p) => [...p, data as Escala]);
       } else if (aba === "Combinados") {
         const { data, error } = await supabase
           .from("combinados")
@@ -1361,15 +1352,6 @@ export default function TreinadorDashboard({
           />
         )}
 
-        {aba === "Escala" && (
-          <Lista
-            vazio="Nenhum horário cadastrado ainda."
-            itens={[...listaEscalas]
-              .sort((a, b) => DIAS.indexOf(a.dia_semana) - DIAS.indexOf(b.dia_semana) || a.horario.localeCompare(b.horario))
-              .map((e) => ({ id: e.id, titulo: `${DIA_LABEL[e.dia_semana]} · ${e.horario.slice(0, 5)}`, corpo: e.turma || "" }))}
-          />
-        )}
-
         {aba === "Combinados" && (
           <Lista
             vazio="Nenhum combinado registrado ainda."
@@ -1409,7 +1391,9 @@ export default function TreinadorDashboard({
             {aba === "One-on-One" && (
               <>
                 <Campo label="Data"><input type="date" value={fData} onChange={(e) => setFData(e.target.value)} style={inputStyle} /></Campo>
-                <Campo label="Tópico"><textarea value={fTexto1} onChange={(e) => setFTexto1(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} placeholder="O que você quer tratar nesse one-on-one" /></Campo>
+                <Campo label="Começar"><textarea value={oocComecar} onChange={(e) => setOocComecar(e.target.value)} style={{ ...inputStyle, minHeight: 66 }} placeholder="O que ele deve começar a fazer" /></Campo>
+                <Campo label="Parar"><textarea value={oocParar} onChange={(e) => setOocParar(e.target.value)} style={{ ...inputStyle, minHeight: 66 }} placeholder="O que ele deve parar de fazer" /></Campo>
+                <Campo label="Continuar"><textarea value={oocContinuar} onChange={(e) => setOocContinuar(e.target.value)} style={{ ...inputStyle, minHeight: 66 }} placeholder="O que ele deve continuar fazendo" /></Campo>
               </>
             )}
 
@@ -1447,20 +1431,6 @@ export default function TreinadorDashboard({
                 </Campo>
                 <Campo label="Início"><input type="date" value={fData} onChange={(e) => setFData(e.target.value)} style={inputStyle} /></Campo>
                 <Campo label="Fim (opcional)"><input type="date" value={fData2} onChange={(e) => setFData2(e.target.value)} style={inputStyle} /></Campo>
-              </>
-            )}
-
-            {aba === "Escala" && (
-              <>
-                <Campo label="Dia da semana">
-                  <select value={fSelect} onChange={(e) => setFSelect(e.target.value)} style={inputStyle}>
-                    {DIAS.map((d) => (
-                      <option key={d} value={d}>{DIA_LABEL[d]}</option>
-                    ))}
-                  </select>
-                </Campo>
-                <Campo label="Horário"><input type="time" value={fHorario} onChange={(e) => setFHorario(e.target.value)} style={inputStyle} /></Campo>
-                <Campo label="Turma (opcional)"><input value={fTexto1} onChange={(e) => setFTexto1(e.target.value)} style={inputStyle} placeholder="Ex: CrossFit 06h" /></Campo>
               </>
             )}
 
