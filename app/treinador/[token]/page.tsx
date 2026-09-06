@@ -13,7 +13,7 @@ export default async function TreinadorPage({ params }: { params: { token: strin
 
   if (!treinador) return notFound();
 
-  const [oneOnOnes, checklist, avaliacoesAula, scorecardAvaliacoes, cursos, desenvolvimento, escalas, combinados, contratos, npsPesquisas] =
+  const [oneOnOnes, checklist, avaliacoesAula, scorecardAvaliacoes, cursos, desenvolvimento, combinados, contratos, npsPesquisas] =
     await Promise.all([
       supabase.from("one_on_ones").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
       supabase.from("checklist_aulas").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
@@ -21,7 +21,6 @@ export default async function TreinadorPage({ params }: { params: { token: strin
       supabase.from("scorecard_avaliacoes").select("*").eq("treinador_id", treinador.id).order("data_final", { ascending: false }),
       supabase.from("cursos").select("*").eq("treinador_id", treinador.id).order("created_at", { ascending: false }),
       supabase.from("desenvolvimento").select("*").eq("treinador_id", treinador.id).order("created_at", { ascending: false }),
-      supabase.from("escalas").select("*").eq("treinador_id", treinador.id),
       supabase.from("combinados").select("*").eq("treinador_id", treinador.id).order("data_combinado", { ascending: false }),
       supabase.from("contratos").select("*").eq("treinador_id", treinador.id),
       supabase.from("nps_pesquisas").select("*, nps_respostas(*)").eq("treinador_id", treinador.id).order("data", { ascending: false }),
@@ -36,7 +35,6 @@ export default async function TreinadorPage({ params }: { params: { token: strin
       scorecardAvaliacoes={scorecardAvaliacoes.data || []}
       cursos={cursos.data || []}
       desenvolvimento={desenvolvimento.data || []}
-      escalas={escalas.data || []}
       combinados={combinados.data || []}
       contratos={contratos.data || []}
       npsPesquisas={npsPesquisas.data || []}
