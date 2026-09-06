@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { Unidade, Treinador, EscalaHorario, CalendarioDia } from "@/lib/types";
+import { FOTOS_TREINADORES } from "@/lib/fotosTreinadores";
 
 const CORES: Record<string, string> = {
   vermelho: "#ef4444",
@@ -26,12 +27,10 @@ function normalizarNome(nome: string) {
     .trim();
 }
 
-const FOTOS_CONHECIDAS = ["maranhao", "robson", "igor", "renato", "guilherme", "roanny"];
-
 function fotoDoTreinador(nome: string): string | null {
   const normalizado = normalizarNome(nome);
-  const encontrado = FOTOS_CONHECIDAS.find((f) => normalizado.includes(f) || f.includes(normalizado));
-  return encontrado ? `/treinadores/${encontrado}.jpg` : null;
+  const chave = Object.keys(FOTOS_TREINADORES).find((f) => normalizado.includes(f) || f.includes(normalizado));
+  return chave ? FOTOS_TREINADORES[chave] : null;
 }
 
 const CORES_FALLBACK = [
