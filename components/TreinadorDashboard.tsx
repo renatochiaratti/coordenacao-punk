@@ -691,7 +691,7 @@ export default function TreinadorDashboard({
       } else if (aba === "Combinados") {
         const { data, error } = await supabase
           .from("combinados")
-          .insert({ treinador_id: treinador.id, descricao: fTexto1, data_combinado: fData, status: fSelect })
+          .insert({ treinador_id: treinador.id, descricao: fTexto1, data_combinado: fData, status: fSelect, data_verificacao: fData2 || null })
           .select()
           .single();
         if (!error && data) setListaCombinados((p) => [data as Combinado, ...p]);
@@ -738,6 +738,17 @@ export default function TreinadorDashboard({
     await supabase.from("combinados").update({ status }).eq("id", item.id);
   }
 
+  async function atualizarCombinado(id: string, campo: "descricao" | "data_combinado" | "data_verificacao", valor: string) {
+    setListaCombinados((p) => p.map((x) => (x.id === id ? { ...x, [campo]: valor || null } : x)));
+    await supabase.from("combinados").update({ [campo]: valor || null }).eq("id", id);
+  }
+
+  async function apagarCombinado(item: Combinado) {
+    if (!confirm("Apagar este combinado?")) return;
+    const { error } = await supabase.from("combinados").delete().eq("id", item.id);
+    if (!error) setListaCombinados((p) => p.filter((x) => x.id !== item.id));
+  }
+
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 20px" }}>
       <p style={{ color: "#9a9a9f", fontSize: 13, marginBottom: 4 }}>{treinador.unidades?.nome}</p>
@@ -756,7 +767,7 @@ export default function TreinadorDashboard({
         ))}
       </div>
 
-      {aba !== "Checklist Aulas" && aba !== "NPS" && aba !== "ScoreCard" && (
+      {aba !== "Checklist Aulas" && aba !== "NPS" && aba !== "ScoreCard" && aba !== "Combinados" && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
           <button
             onClick={abrirModal}
@@ -1353,17 +1364,82 @@ export default function TreinadorDashboard({
         )}
 
         {aba === "Combinados" && (
-          <Lista
-            vazio="Nenhum combinado registrado ainda."
-            itens={listaCombinados.map((c) => ({
-              id: c.id,
-              titulo: c.descricao,
-              corpo: fmtDate(c.data_combinado),
-              status: c.status,
-              statusLabel: STATUS_LABEL[c.status],
-              onClick: () => alternarCombinado(c),
-            }))}
-          />
+          <div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+              <button
+                onClick={abrirModal}
+                className="font-bold"
+                style={{ background: "#ff6a00", color: "#0d0d0d", padding: "8px 16px", borderRadius: 8 }}
+              >
+                + Adicionar
+              </button>
+            </div>
+
+            {listaCombinados.length === 0 ? (
+              <p style={{ color: "#9a9a9f", textAlign: "center", padding: 20 }}>Nenhum combinado registrado ainda.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {listaCombinados.map((c) => (
+                  <div key={c.id} style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
+                      <button
+                        onClick={() => alternarCombinado(c)}
+                        className="font-extrabold"
+                        style={{
+                          flexShrink: 0,
+                          padding: "5px 12px",
+                          borderRadius: 8,
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: 12,
+                          background:
+                            c.status === "em_dia" ? "#1fbf5c" : c.status === "pendente" ? "#f5c518" : "#e5484d",
+                          color: "#0d0d0d",
+                        }}
+                      >
+                        {STATUS_LABEL[c.status]}
+                      </button>
+                      <button
+                        onClick={() => apagarCombinado(c)}
+                        title="Apagar"
+                        style={{ color: "#ff5a5a", background: "transparent", border: "none", fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1 }}
+                      >
+                        🗑
+                      </button>
+                    </div>
+
+                    <textarea
+                      defaultValue={c.descricao}
+                      onBlur={(e) => atualizarCombinado(c.id, "descricao", e.target.value)}
+                      style={{ ...inputStyle, minHeight: 60, marginBottom: 10 }}
+                      placeholder="Descrição do combinado"
+                    />
+
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <label style={{ display: "block", fontSize: 11, color: "#9a9a9f", marginBottom: 4 }}>Data do combinado</label>
+                        <input
+                          type="date"
+                          defaultValue={c.data_combinado}
+                          onChange={(e) => atualizarCombinado(c.id, "data_combinado", e.target.value)}
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <label style={{ display: "block", fontSize: 11, color: "#9a9a9f", marginBottom: 4 }}>Verificar em</label>
+                        <input
+                          type="date"
+                          defaultValue={c.data_verificacao || ""}
+                          onChange={(e) => atualizarCombinado(c.id, "data_verificacao", e.target.value)}
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {aba === "Contrato" && (
@@ -1437,7 +1513,7 @@ export default function TreinadorDashboard({
             {aba === "Combinados" && (
               <>
                 <Campo label="Descrição"><textarea value={fTexto1} onChange={(e) => setFTexto1(e.target.value)} style={{ ...inputStyle, minHeight: 70 }} /></Campo>
-                <Campo label="Data"><input type="date" value={fData} onChange={(e) => setFData(e.target.value)} style={inputStyle} /></Campo>
+                <Campo label="Data do combinado"><input type="date" value={fData} onChange={(e) => setFData(e.target.value)} style={inputStyle} /></Campo>
                 <Campo label="Status">
                   <select value={fSelect} onChange={(e) => setFSelect(e.target.value)} style={inputStyle}>
                     <option value="em_dia">Em dia</option>
@@ -1445,6 +1521,7 @@ export default function TreinadorDashboard({
                     <option value="quebrado">Quebrado</option>
                   </select>
                 </Campo>
+                <Campo label="Verificar em (opcional)"><input type="date" value={fData2} onChange={(e) => setFData2(e.target.value)} style={inputStyle} /></Campo>
               </>
             )}
 
