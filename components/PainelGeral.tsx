@@ -4,13 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { Treinador, Unidade } from "@/lib/types";
 
-const BLOCO_GRADIENTES = [
-  "linear-gradient(135deg, #ff6a00, #b34700)",
-  "linear-gradient(135deg, #1fbf5c, #0d5c2b)",
-  "linear-gradient(135deg, #4a90e2, #1a3a63)",
-  "linear-gradient(135deg, #b19cd9, #4a3d63)",
-  "linear-gradient(135deg, #f5c518, #7a600b)",
-];
+const LETRAS_PUNK = ["P", "U", "N", "K"];
 
 export default function PainelGeral({
   unidades,
@@ -43,6 +37,10 @@ export default function PainelGeral({
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 20px" }}>
+      <style jsx global>{`
+        @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700;1,900&display=swap");
+      `}</style>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 className="font-extrabold text-2xl">Coordenação — Punk CrossFit</h1>
         <button
@@ -57,28 +55,87 @@ export default function PainelGeral({
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {unidades.map((u, i) => {
           const qtd = lista.filter((t) => t.unidade_id === u.id).length;
+          const letra = LETRAS_PUNK[i % LETRAS_PUNK.length];
           return (
             <a
               key={u.id}
               href={`/unidade/${u.id}`}
               style={{
+                position: "relative",
                 display: "flex",
-                flexDirection: "column",
-                justifyContent: "flex-end",
-                minHeight: 140,
+                alignItems: "center",
+                minHeight: 150,
                 borderRadius: 16,
-                padding: 20,
+                padding: "20px 24px",
                 textDecoration: "none",
-                background: BLOCO_GRADIENTES[i % BLOCO_GRADIENTES.length],
-                boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+                background: "linear-gradient(155deg, #161616, #050505)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                boxShadow: "0 6px 20px rgba(0,0,0,0.5)",
+                overflow: "hidden",
               }}
             >
-              <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                {qtd} treinador{qtd === 1 ? "" : "es"}
-              </span>
-              <span className="font-extrabold" style={{ fontSize: 24, color: "#fff", marginTop: 4 }}>
+              <span
+                style={{
+                  position: "absolute",
+                  right: -10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontFamily: "'Playfair Display', serif",
+                  fontStyle: "italic",
+                  fontWeight: 900,
+                  fontSize: 92,
+                  lineHeight: 1,
+                  whiteSpace: "nowrap",
+                  color: "transparent",
+                  WebkitTextStroke: "1px rgba(255,255,255,0.14)",
+                  letterSpacing: -2,
+                  pointerEvents: "none",
+                  userSelect: "none",
+                }}
+              >
                 {u.nome}
               </span>
+
+              <span
+                style={{
+                  position: "relative",
+                  fontFamily: "'Playfair Display', serif",
+                  fontStyle: "italic",
+                  fontWeight: 900,
+                  fontSize: 68,
+                  lineHeight: 1,
+                  color: "#ff6a00",
+                  marginRight: 20,
+                  flexShrink: 0,
+                  textShadow: "0 2px 18px rgba(255,106,0,0.35)",
+                }}
+              >
+                {letra}
+              </span>
+
+              <div style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+                <span
+                  style={{
+                    color: "rgba(255,255,255,0.55)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 1.5,
+                  }}
+                >
+                  {qtd} treinador{qtd === 1 ? "" : "es"}
+                </span>
+                <span
+                  className="font-extrabold"
+                  style={{
+                    fontSize: 22,
+                    color: "#fff",
+                    marginTop: 2,
+                  }}
+                >
+                  {u.nome}
+                </span>
+              </div>
             </a>
           );
         })}
