@@ -94,6 +94,7 @@ export type Combinado = {
   descricao: string;
   data_combinado: string;
   status: "em_dia" | "pendente" | "quebrado";
+  data_verificacao: string | null;
 };
 
 export type Contrato = {
