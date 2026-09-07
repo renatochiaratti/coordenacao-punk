@@ -116,10 +116,10 @@ export default function UnidadeDashboard({
     }
   }
 
-  const BLOCOS: { id: Secao; titulo: string; subtitulo: string; gradiente: string }[] = [
-    { id: "professores", titulo: "Professores", subtitulo: `${listaTreinadores.length} ativo(s)`, gradiente: "linear-gradient(135deg, #1fbf5c, #0d5c2b)" },
-    { id: "diaria", titulo: "Escala Diária", subtitulo: `${listaHorarios.length} horários`, gradiente: "linear-gradient(135deg, #ff6a00, #b34700)" },
-    { id: "anual", titulo: "Escala Anual", subtitulo: `${listaDias.length} dias`, gradiente: "linear-gradient(135deg, #4a90e2, #1a3a63)" },
+  const BLOCOS: { id: Secao; titulo: string; subtitulo: string }[] = [
+    { id: "professores", titulo: "Professores", subtitulo: `${listaTreinadores.length} ativo(s)` },
+    { id: "diaria", titulo: "Escala Diária", subtitulo: `${listaHorarios.length} horários` },
+    { id: "anual", titulo: "Escala Anual", subtitulo: `${listaDias.length} dias` },
   ];
 
   return (
@@ -138,30 +138,75 @@ export default function UnidadeDashboard({
 
       {secao === "menu" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <style jsx global>{`
+            @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700;1,900&display=swap");
+          `}</style>
           {BLOCOS.map((b) => (
             <button
               key={b.id}
               onClick={() => setSecao(b.id)}
               style={{
+                position: "relative",
                 display: "flex",
-                flexDirection: "column",
-                justifyContent: "flex-end",
-                minHeight: 140,
+                alignItems: "center",
+                minHeight: 150,
                 borderRadius: 16,
-                padding: 20,
-                border: "none",
+                padding: "20px 24px",
+                border: "1px solid rgba(255,255,255,0.06)",
                 textAlign: "left",
                 cursor: "pointer",
-                background: b.gradiente,
-                boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+                background: "linear-gradient(155deg, #161616, #050505)",
+                boxShadow: "0 6px 20px rgba(0,0,0,0.5)",
+                overflow: "hidden",
               }}
             >
-              <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                {b.subtitulo}
-              </span>
-              <span className="font-extrabold" style={{ fontSize: 24, color: "#fff", marginTop: 4 }}>
+              <span
+                style={{
+                  position: "absolute",
+                  right: -10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontFamily: "'Playfair Display', serif",
+                  fontStyle: "italic",
+                  fontWeight: 900,
+                  fontSize: 76,
+                  lineHeight: 1,
+                  whiteSpace: "nowrap",
+                  color: "transparent",
+                  WebkitTextStroke: "1px rgba(255,255,255,0.14)",
+                  letterSpacing: -2,
+                  pointerEvents: "none",
+                  userSelect: "none",
+                }}
+              >
                 {b.titulo}
               </span>
+
+              <span
+                style={{
+                  position: "relative",
+                  fontFamily: "'Playfair Display', serif",
+                  fontStyle: "italic",
+                  fontWeight: 900,
+                  fontSize: 68,
+                  lineHeight: 1,
+                  color: "#ff6a00",
+                  marginRight: 20,
+                  flexShrink: 0,
+                  textShadow: "0 2px 18px rgba(255,106,0,0.35)",
+                }}
+              >
+                {b.titulo.charAt(0)}
+              </span>
+
+              <div style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+                <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5 }}>
+                  {b.subtitulo}
+                </span>
+                <span className="font-extrabold" style={{ fontSize: 22, color: "#fff", marginTop: 2 }}>
+                  {b.titulo}
+                </span>
+              </div>
             </button>
           ))}
         </div>
