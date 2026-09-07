@@ -1411,7 +1411,7 @@ export default function TreinadorDashboard({
                     <textarea
                       defaultValue={c.descricao}
                       onBlur={(e) => atualizarCombinado(c.id, "descricao", e.target.value)}
-                      style={{ ...inputStyle, minHeight: 60, marginBottom: 10 }}
+                      style={{ ...inputStyle, minHeight: 180, marginBottom: 10, fontSize: 15, lineHeight: 1.6, padding: 14 }}
                       placeholder="Descrição do combinado"
                     />
 
