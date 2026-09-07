@@ -179,7 +179,7 @@ export default function UnidadeDashboard({
                   userSelect: "none",
                 }}
               >
-                {b.titulo}
+                {b.titulo.slice(1)}
               </span>
 
               <span
