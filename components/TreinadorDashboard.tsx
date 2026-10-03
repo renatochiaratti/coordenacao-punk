@@ -402,6 +402,7 @@ export default function TreinadorDashboard({
   );
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
   const [avaliacaoAbertaId, setAvaliacaoAbertaId] = useState<string | null>(null);
+  const [oneOnOneAbertoId, setOneOnOneAbertoId] = useState<string | null>(null);
   const [editandoAvaliacaoId, setEditandoAvaliacaoId] = useState<string | null>(null);
   const [apagandoAvaliacaoId, setApagandoAvaliacaoId] = useState<string | null>(null);
 
@@ -866,51 +867,81 @@ export default function TreinadorDashboard({
           listaOneOnOnes.length === 0 ? (
             <p style={{ color: "#9a9a9f", textAlign: "center", padding: 20 }}>Nenhum one-on-one registrado ainda.</p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              {listaOneOnOnes.map((o, i) => (
-                <div
-                  key={o.id}
-                  style={{
-                    paddingBottom: 18,
-                    borderBottom: i < listaOneOnOnes.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <div>
-                      <div className="font-bold">{fmtDate(o.data)}</div>
-                      {o.topicos && (
-                        <div style={{ color: "#9a9a9f", fontSize: 13, marginTop: 2, whiteSpace: "pre-wrap" }}>{o.topicos}</div>
-                      )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {listaOneOnOnes.map((o) => {
+                const aberto = oneOnOneAbertoId === o.id;
+                const cpc = parseCPC(o.topicos);
+                return (
+                  <div key={o.id} style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <button
+                        onClick={() => setOneOnOneAbertoId(aberto ? null : o.id)}
+                        style={{
+                          display: "flex",
+                          flex: 1,
+                          background: "transparent",
+                          border: "none",
+                          color: "#f2f2f0",
+                          cursor: "pointer",
+                          padding: 0,
+                          textAlign: "left",
+                        }}
+                      >
+                        <span className="font-bold">{fmtDate(o.data)}</span>
+                      </button>
+                      <button
+                        onClick={() => apagarOneOnOne(o)}
+                        disabled={apagandoId === o.id}
+                        title="Apagar"
+                        style={{ color: "#ff5a5a", background: "transparent", border: "none", fontSize: 18, cursor: "pointer", padding: 4, lineHeight: 1 }}
+                      >
+                        🗑
+                      </button>
                     </div>
-                    <button
-                      onClick={() => apagarOneOnOne(o)}
-                      disabled={apagandoId === o.id}
-                      title="Apagar"
-                      style={{ color: "#ff5a5a", background: "transparent", border: "none", fontSize: 18, cursor: "pointer", padding: 4, lineHeight: 1 }}
-                    >
-                      🗑
-                    </button>
-                  </div>
 
-                  <div style={{ marginTop: 10 }}>
-                    <label style={{ display: "block", fontSize: 12, color: "#9a9a9f", marginBottom: 4 }}>Resposta</label>
-                    <textarea
-                      value={getResposta(o)}
-                      onChange={(e) => setRespostaDrafts((p) => ({ ...p, [o.id]: e.target.value }))}
-                      style={{ ...inputStyle, minHeight: 60 }}
-                      placeholder="Escreva aqui a resposta / execução deste tópico..."
-                    />
-                    <button
-                      onClick={() => salvarResposta(o)}
-                      disabled={salvandoResposta === o.id}
-                      className="font-bold"
-                      style={{ marginTop: 6, background: "#ff6a00", color: "#0d0d0d", padding: "6px 14px", borderRadius: 8, fontSize: 13 }}
-                    >
-                      {salvandoResposta === o.id ? "Salvando..." : "Salvar resposta"}
-                    </button>
+                    {aberto && (
+                      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                        {cpc.comecar && (
+                          <div>
+                            <div className="font-extrabold" style={{ fontSize: 13 }}><LabelCPC letra="C" resto="omeçar" /></div>
+                            <div style={{ fontSize: 14, marginTop: 2, whiteSpace: "pre-wrap" }}>{cpc.comecar}</div>
+                          </div>
+                        )}
+                        {cpc.parar && (
+                          <div>
+                            <div className="font-extrabold" style={{ fontSize: 13 }}><LabelCPC letra="P" resto="arar" /></div>
+                            <div style={{ fontSize: 14, marginTop: 2, whiteSpace: "pre-wrap" }}>{cpc.parar}</div>
+                          </div>
+                        )}
+                        {cpc.continuar && (
+                          <div>
+                            <div className="font-extrabold" style={{ fontSize: 13 }}><LabelCPC letra="C" resto="ontinuar" /></div>
+                            <div style={{ fontSize: 14, marginTop: 2, whiteSpace: "pre-wrap" }}>{cpc.continuar}</div>
+                          </div>
+                        )}
+
+                        <div style={{ marginTop: 4, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                          <label style={{ display: "block", fontSize: 12, color: "#9a9a9f", marginBottom: 4 }}>Observação</label>
+                          <textarea
+                            value={getResposta(o)}
+                            onChange={(e) => setRespostaDrafts((p) => ({ ...p, [o.id]: e.target.value }))}
+                            style={{ ...inputStyle, minHeight: 70 }}
+                            placeholder="Escreva aqui a observação / execução deste tópico..."
+                          />
+                          <button
+                            onClick={() => salvarResposta(o)}
+                            disabled={salvandoResposta === o.id}
+                            className="font-bold"
+                            style={{ marginTop: 6, background: "#ff6a00", color: "#0d0d0d", padding: "6px 14px", borderRadius: 8, fontSize: 13 }}
+                          >
+                            {salvandoResposta === o.id ? "Salvando..." : "Salvar observação"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )
         )}
@@ -1998,4 +2029,26 @@ function fmtDate(iso: string) {
   if (!iso) return "";
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
+}
+
+function parseCPC(texto: string | null) {
+  const linhas = (texto || "").split("\n");
+  let comecar = "";
+  let parar = "";
+  let continuar = "";
+  linhas.forEach((linha) => {
+    if (linha.startsWith("- Começar:")) comecar = linha.replace("- Começar:", "").trim();
+    else if (linha.startsWith("- Parar:")) parar = linha.replace("- Parar:", "").trim();
+    else if (linha.startsWith("- Continuar:")) continuar = linha.replace("- Continuar:", "").trim();
+  });
+  return { comecar, parar, continuar };
+}
+
+function LabelCPC({ letra, resto }: { letra: string; resto: string }) {
+  return (
+    <span>
+      <span style={{ color: "#fff", fontWeight: 900 }}>{letra}</span>
+      <span style={{ color: "#9a9a9f", fontWeight: 700 }}>{resto}</span>
+    </span>
+  );
 }
