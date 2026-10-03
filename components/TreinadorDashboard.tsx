@@ -53,6 +53,17 @@ const ABAS = [
   "Contrato",
 ] as const;
 
+const ABA_CORES: Record<(typeof ABAS)[number], string> = {
+  "One-on-One": "#ff6a00",
+  "Checklist Aulas": "#1fbf5c",
+  ScoreCard: "#4a90e2",
+  NPS: "#b19cd9",
+  Cursos: "#f5c518",
+  Desenvolvimento: "#ec4899",
+  Combinados: "#22c55e",
+  Contrato: "#9a9a9f",
+};
+
 const STATUS_LABEL: Record<string, string> = {
   planejado: "Planejado",
   em_andamento: "Em andamento",
@@ -751,20 +762,91 @@ export default function TreinadorDashboard({
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 20px" }}>
+      <style jsx global>{`
+        @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700;1,900&display=swap");
+      `}</style>
+
       <p style={{ color: "#9a9a9f", fontSize: 13, marginBottom: 4 }}>{treinador.unidades?.nome}</p>
       <h1 className="font-extrabold text-2xl mb-6">{treinador.nome}</h1>
 
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
-        {ABAS.map((a) => (
-          <button
-            key={a}
-            onClick={() => setAba(a)}
-            className="status-pill"
-            style={{ background: aba === a ? "#ff6a00" : "#1f2024", color: aba === a ? "#0d0d0d" : "#f2f2f0" }}
-          >
-            {a}
-          </button>
-        ))}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+          gap: 10,
+          marginBottom: 24,
+        }}
+      >
+        {ABAS.map((a) => {
+          const ativa = aba === a;
+          const cor = ABA_CORES[a];
+          return (
+            <button
+              key={a}
+              onClick={() => setAba(a)}
+              style={{
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-end",
+                minHeight: 92,
+                borderRadius: 14,
+                padding: "12px 14px",
+                textAlign: "left",
+                cursor: "pointer",
+                overflow: "hidden",
+                background: ativa ? "linear-gradient(155deg, #262626, #0d0d0d)" : "linear-gradient(155deg, #161616, #050505)",
+                border: ativa ? `1px solid ${cor}88` : "1px solid rgba(255,255,255,0.06)",
+                boxShadow: ativa ? `0 0 0 1px ${cor}44, 0 6px 16px rgba(0,0,0,0.5)` : "0 4px 14px rgba(0,0,0,0.4)",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  right: -6,
+                  top: -10,
+                  fontFamily: "'Playfair Display', serif",
+                  fontStyle: "italic",
+                  fontWeight: 900,
+                  fontSize: 56,
+                  lineHeight: 1,
+                  color: "transparent",
+                  WebkitTextStroke: `1px ${cor}33`,
+                  pointerEvents: "none",
+                  userSelect: "none",
+                }}
+              >
+                {a.charAt(0)}
+              </span>
+              <span
+                style={{
+                  position: "relative",
+                  fontFamily: "'Playfair Display', serif",
+                  fontStyle: "italic",
+                  fontWeight: 900,
+                  fontSize: 26,
+                  lineHeight: 1,
+                  color: cor,
+                  marginBottom: 4,
+                  textShadow: `0 2px 12px ${cor}55`,
+                }}
+              >
+                {a.charAt(0)}
+              </span>
+              <span
+                className="font-bold"
+                style={{
+                  position: "relative",
+                  fontSize: 12.5,
+                  color: ativa ? "#fff" : "#d8d8d8",
+                  lineHeight: 1.25,
+                }}
+              >
+                {a}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {aba !== "Checklist Aulas" && aba !== "NPS" && aba !== "ScoreCard" && aba !== "Combinados" && (
