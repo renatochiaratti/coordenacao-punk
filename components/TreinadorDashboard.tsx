@@ -55,13 +55,13 @@ const ABAS = [
 
 const ABA_CORES: Record<(typeof ABAS)[number], string> = {
   "One-on-One": "#ff6a00",
-  "Checklist Aulas": "#1fbf5c",
-  ScoreCard: "#4a90e2",
-  NPS: "#b19cd9",
-  Cursos: "#f5c518",
-  Desenvolvimento: "#ec4899",
-  Combinados: "#22c55e",
-  Contrato: "#9a9a9f",
+  "Checklist Aulas": "#ff6a00",
+  ScoreCard: "#ff6a00",
+  NPS: "#ff6a00",
+  Cursos: "#ff6a00",
+  Desenvolvimento: "#ff6a00",
+  Combinados: "#ff6a00",
+  Contrato: "#ff6a00",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -772,10 +772,13 @@ export default function TreinadorDashboard({
 
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+          display: "flex",
+          flexWrap: "nowrap",
           gap: 10,
           marginBottom: 24,
+          overflowX: "auto",
+          paddingBottom: 4,
+          WebkitOverflowScrolling: "touch",
         }}
       >
         {ABAS.map((a) => {
@@ -790,6 +793,8 @@ export default function TreinadorDashboard({
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "flex-end",
+                flex: "0 0 auto",
+                width: 120,
                 minHeight: 92,
                 borderRadius: 14,
                 padding: "12px 14px",
