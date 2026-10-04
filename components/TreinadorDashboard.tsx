@@ -680,8 +680,13 @@ export default function TreinadorDashboard({
           .insert({ treinador_id: treinador.id, nome: fTexto1, status: fSelect, data_conclusao: fData2 || null })
           .select()
           .single();
-        if (!error && data) setListaCursos((p) => [data as Curso, ...p]);
+                if (error) {
+          alert("Não foi possível salvar o curso: " + error.message);
+          return;
+        }
+        if (data) setListaCursos((p) => [data as Curso, ...p]);
       } else if (aba === "Combinados") {
+
         const { data, error } = await supabase
           .from("combinados")
           .insert({ treinador_id: treinador.id, descricao: fTexto1, data_combinado: fData, status: fSelect, data_verificacao: fData2 || null })
