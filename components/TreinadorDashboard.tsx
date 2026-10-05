@@ -21,20 +21,20 @@ const PERGUNTAS_AVALIACAO = [
   "O briefing foi completo?",
   "Mobilizou as articulações?",
   "Subiu a frequência?",
-  "Foi coerente?",
-  "Organizou a turma no ensino?",
-  "O ensino foi coerente?",
-  "Ensinou?",
-  "Observou e corrigiu?",
-  "Usou posições dinâmicas e estáticas?",
+  "Organizou a turma para o ensino?",
+  "Ensinou? (o que e como)",
+  "Observou?",
+  "Corrigiu ou validou?",
+  "Foi coerente no ensino?",
   "Usou o auxiliar de forma inteligente?",
   "Fez scaling quando necessários?",
-  "Preparou corretamente para WOD? (subiu frequência)",
+  "Preparou para WOD? (subiu frequência)",
   "Foi articulado na explicação do WOD?",
   "Os alunos ficaram no estimulo pretendido?",
-  "Foi presente no WOD?",
-  "Teve presença e atitude dentro do WOD?",
-  "Fez cool down como combinado?",
+  "Presença e atitude no WOD? (Correção e o resto)",
+  "Conseguiu observar e corrigir os alunos dentro do WOD?",
+  "Fez cool down / encerrou a aula como combinado?",
+  "Criou uma atmosfera positiva na aula?",
   "Hands free?",
   "Terminou no horário?",
 ];
@@ -174,9 +174,9 @@ function calcularScorecard(avaliacao: ScorecardAvaliacao) {
 }
 
 const PERGUNTA_AVALIACAO_CATEGORIA: string[] = [
-  "presenca", "ensino", "ensino", "ensino", "ensino", "gerenciamento", "ensino", "ensino",
-  "correcao", "demonstracao", "gerenciamento", "correcao", "ensino", "ensino", "presenca",
-  "presenca", "presenca", "gerenciamento", "demonstracao", "presenca",
+  "presenca", "ensino", "ensino", "ensino", "gerenciamento", "ensino", "observacao",
+  "correcao", "ensino", "gerenciamento", "correcao", "ensino", "ensino", "presenca",
+  "presenca", "correcao", "gerenciamento", "presenca", "demonstracao", "presenca",
 ];
 
 const SCORECARD_SUGESTAO_ATIVIDADE: Record<string, string> = {
@@ -499,7 +499,7 @@ export default function TreinadorDashboard({
         pergunta6: npsPerguntas[5].trim() || NPS_PERGUNTAS_PADRAO[5],
         pergunta7: npsPerguntas[6].trim() || NPS_PERGUNTA7_PADRAO,
       };
-
+      
       if (editandoNpsId) {
         const { error } = await supabase.from("nps_pesquisas").update(payload).eq("id", editandoNpsId);
         if (error) {
@@ -680,13 +680,12 @@ export default function TreinadorDashboard({
           .insert({ treinador_id: treinador.id, nome: fTexto1, status: fSelect, data_conclusao: fData2 || null })
           .select()
           .single();
-                if (error) {
+        if (error) {
           alert("Não foi possível salvar o curso: " + error.message);
           return;
         }
         if (data) setListaCursos((p) => [data as Curso, ...p]);
       } else if (aba === "Combinados") {
-
         const { data, error } = await supabase
           .from("combinados")
           .insert({ treinador_id: treinador.id, descricao: fTexto1, data_combinado: fData, status: fSelect, data_verificacao: fData2 || null })
