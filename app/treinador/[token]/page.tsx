@@ -13,17 +13,29 @@ export default async function TreinadorPage({ params }: { params: { token: strin
 
   if (!treinador) return notFound();
 
-  const [oneOnOnes, checklist, avaliacoesAula, scorecardAvaliacoes, cursos, combinados, contratos, npsPesquisas] =
-    await Promise.all([
-      supabase.from("one_on_ones").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
-      supabase.from("checklist_aulas").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
-      supabase.from("avaliacoes_aula").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
-      supabase.from("scorecard_avaliacoes").select("*").eq("treinador_id", treinador.id).order("data_final", { ascending: false }),
-      supabase.from("cursos").select("*").eq("treinador_id", treinador.id).order("created_at", { ascending: false }),
-      supabase.from("combinados").select("*").eq("treinador_id", treinador.id).order("data_combinado", { ascending: false }),
-      supabase.from("contratos").select("*").eq("treinador_id", treinador.id),
-      supabase.from("nps_pesquisas").select("*, nps_respostas(*)").eq("treinador_id", treinador.id).order("data", { ascending: false }),
-    ]);
+  const [
+    oneOnOnes,
+    checklist,
+    avaliacoesAula,
+    scorecardAvaliacoes,
+    cursos,
+    combinados,
+    contratos,
+    npsPesquisas,
+    valoresHora,
+    feriasRegistros,
+  ] = await Promise.all([
+    supabase.from("one_on_ones").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
+    supabase.from("checklist_aulas").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
+    supabase.from("avaliacoes_aula").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
+    supabase.from("scorecard_avaliacoes").select("*").eq("treinador_id", treinador.id).order("data_final", { ascending: false }),
+    supabase.from("cursos").select("*").eq("treinador_id", treinador.id).order("created_at", { ascending: false }),
+    supabase.from("combinados").select("*").eq("treinador_id", treinador.id).order("data_combinado", { ascending: false }),
+    supabase.from("contratos").select("*").eq("treinador_id", treinador.id),
+    supabase.from("nps_pesquisas").select("*, nps_respostas(*)").eq("treinador_id", treinador.id).order("data", { ascending: false }),
+    supabase.from("valores_hora").select("*").eq("treinador_id", treinador.id).order("vigente_desde", { ascending: false }),
+    supabase.from("ferias_registros").select("*").eq("treinador_id", treinador.id).order("data_inicio", { ascending: false }),
+  ]);
 
   return (
     <TreinadorDashboard
@@ -36,6 +48,8 @@ export default async function TreinadorPage({ params }: { params: { token: strin
       combinados={combinados.data || []}
       contratos={contratos.data || []}
       npsPesquisas={npsPesquisas.data || []}
+      valoresHora={valoresHora.data || []}
+      feriasRegistros={feriasRegistros.data || []}
     />
   );
 }
