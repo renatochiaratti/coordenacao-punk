@@ -104,6 +104,25 @@ export type Contrato = {
   data_inicio: string | null;
   data_renovacao: string | null;
   observacoes: string | null;
+  atividades_extras_feitas: number;
+  atividades_extras_meta: number;
+};
+
+export type ValorHora = {
+  id: string;
+  treinador_id: string;
+  valor: number;
+  vigente_desde: string;
+  created_at: string;
+};
+
+export type FeriasRegistro = {
+  id: string;
+  treinador_id: string;
+  data_inicio: string;
+  data_fim: string;
+  dias: number;
+  created_at: string;
 };
 
 export type EscalaHorario = {
