@@ -14,6 +14,8 @@ import type {
   Contrato,
   NpsPesquisa,
   NpsResposta,
+  ValorHora,
+  FeriasRegistro,
 } from "@/lib/types";
 
 const PERGUNTAS_AVALIACAO = [
@@ -76,6 +78,29 @@ const COMBINADO_CICLO: Record<string, Combinado["status"]> = {
   pendente: "quebrado",
   quebrado: "em_dia",
 };
+
+// Metas usadas nos critérios de reajuste da aba Contrato.
+// Ajuste aqui caso o número mude — não precisa tocar no resto do código.
+const CONTRATO_META_NPS = 80;
+const CONTRATO_META_SCORECARD = 75;
+
+function addMeses(iso: string, meses: number) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const data = new Date(y, m - 1 + meses, d);
+  return data.toISOString().slice(0, 10);
+}
+
+function diasEntre(isoInicio: string, isoFim: string) {
+  const a = new Date(isoInicio + "T00:00:00");
+  const b = new Date(isoFim + "T00:00:00");
+  return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
+
+function corStatusCriterio(status: "ok" | "pendente" | "nao_atingido") {
+  if (status === "ok") return { cor: "#1fbf5c", fundo: "rgba(31,191,92,0.14)", label: "Atingido" };
+  if (status === "pendente") return { cor: "#ff6a00", fundo: "rgba(255,106,0,0.14)", label: "Pendente" };
+  return { cor: "#e5484d", fundo: "rgba(229,72,77,0.14)", label: "Não atingido" };
+}
 
 const CURSO_STATUS_ORDEM: Curso["status"][] = ["x", "ok", "combinado"];
 const CURSO_STATUS_LABEL: Record<Curso["status"], string> = {
@@ -307,6 +332,8 @@ export default function TreinadorDashboard({
   contratos,
   npsPesquisas,
   scorecardAvaliacoes,
+  valoresHora,
+  feriasRegistros,
 }: {
   treinador: Treinador;
   oneOnOnes: OneOnOne[];
@@ -317,6 +344,8 @@ export default function TreinadorDashboard({
   combinados: Combinado[];
   contratos: Contrato[];
   npsPesquisas: (NpsPesquisa & { nps_respostas: NpsResposta[] })[];
+  valoresHora: ValorHora[];
+  feriasRegistros: FeriasRegistro[];
 }) {
   const [aba, setAba] = useState<(typeof ABAS)[number]>("One-on-One");
   const [showModal, setShowModal] = useState(false);
@@ -329,6 +358,8 @@ export default function TreinadorDashboard({
   const [listaCombinados, setListaCombinados] = useState(combinados);
   const [listaContratos, setListaContratos] = useState(contratos);
   const [listaPesquisas, setListaPesquisas] = useState(npsPesquisas);
+  const [listaValoresHora, setListaValoresHora] = useState(valoresHora);
+  const [listaFeriasRegistros, setListaFeriasRegistros] = useState(feriasRegistros);
   const [linkCopiadoId, setLinkCopiadoId] = useState<string | null>(null);
 
   const hoje = new Date().toISOString().slice(0, 10);
@@ -738,6 +769,220 @@ export default function TreinadorDashboard({
     if (!confirm("Apagar este combinado?")) return;
     const { error } = await supabase.from("combinados").delete().eq("id", item.id);
     if (!error) setListaCombinados((p) => p.filter((x) => x.id !== item.id));
+  }
+
+  // ---- Contrato: dados do contrato ativo (edição inline, igual Combinados) ----
+  const contratoAtivo = listaContratos[0] || null;
+
+  async function atualizarContratoAtivo(
+    campo: "tipo_contrato" | "data_inicio" | "data_renovacao" | "observacoes",
+    valor: string
+  ) {
+    if (!contratoAtivo) return;
+    setListaContratos((p) => p.map((x) => (x.id === contratoAtivo.id ? { ...x, [campo]: valor || null } : x)));
+    await supabase.from("contratos").update({ [campo]: valor || null }).eq("id", contratoAtivo.id);
+  }
+
+  async function atualizarAtividadesExtras(campo: "atividades_extras_feitas" | "atividades_extras_meta", valor: number) {
+    if (!contratoAtivo) return;
+    const v = Number.isFinite(valor) && valor >= 0 ? valor : 0;
+    setListaContratos((p) => p.map((x) => (x.id === contratoAtivo.id ? { ...x, [campo]: v } : x)));
+    await supabase.from("contratos").update({ [campo]: v }).eq("id", contratoAtivo.id);
+  }
+
+  // ---- Contrato: valor da hora aula, com histórico ----
+  const [showValorHoraModal, setShowValorHoraModal] = useState(false);
+  const [vhValor, setVhValor] = useState("");
+  const [vhData, setVhData] = useState(hoje);
+  const [salvandoVH, setSalvandoVH] = useState(false);
+
+  function abrirModalValorHora() {
+    setVhValor("");
+    setVhData(hoje);
+    setShowValorHoraModal(true);
+  }
+
+  async function salvarValorHora() {
+    const valorNum = parseFloat(vhValor.replace(",", "."));
+    if (!valorNum || valorNum <= 0) {
+      alert("Informe um valor válido para a hora aula.");
+      return;
+    }
+    if (!treinador.id) return;
+    setSalvandoVH(true);
+    try {
+      const { data, error } = await supabase
+        .from("valores_hora")
+        .insert({ treinador_id: treinador.id, valor: valorNum, vigente_desde: vhData })
+        .select()
+        .single();
+      if (error) {
+        alert("Não foi possível salvar o valor da hora: " + error.message);
+        return;
+      }
+      if (data) {
+        setListaValoresHora((p) => [data as ValorHora, ...p].sort((a, b) => (a.vigente_desde < b.vigente_desde ? 1 : -1)));
+      }
+      setShowValorHoraModal(false);
+    } finally {
+      setSalvandoVH(false);
+    }
+  }
+
+  // ---- Contrato: férias ----
+  const [showFeriasModal, setShowFeriasModal] = useState(false);
+  const [frInicio, setFrInicio] = useState(hoje);
+  const [frFim, setFrFim] = useState(hoje);
+  const [salvandoFerias, setSalvandoFerias] = useState(false);
+
+  function abrirModalFerias() {
+    setFrInicio(hoje);
+    setFrFim(hoje);
+    setShowFeriasModal(true);
+  }
+
+  async function salvarFerias() {
+    const dias = diasEntre(frInicio, frFim) + 1;
+    if (dias <= 0) {
+      alert("A data final precisa ser igual ou depois da data inicial.");
+      return;
+    }
+    setSalvandoFerias(true);
+    try {
+      const { data, error } = await supabase
+        .from("ferias_registros")
+        .insert({ treinador_id: treinador.id, data_inicio: frInicio, data_fim: frFim, dias })
+        .select()
+        .single();
+      if (error) {
+        alert("Não foi possível registrar as férias: " + error.message);
+        return;
+      }
+      if (data) {
+        setListaFeriasRegistros((p) => [data as FeriasRegistro, ...p].sort((a, b) => (a.data_inicio < b.data_inicio ? 1 : -1)));
+      }
+      setShowFeriasModal(false);
+    } finally {
+      setSalvandoFerias(false);
+    }
+  }
+
+  async function apagarFeriasRegistro(item: FeriasRegistro) {
+    if (!confirm("Apagar este registro de férias?")) return;
+    const { error } = await supabase.from("ferias_registros").delete().eq("id", item.id);
+    if (!error) setListaFeriasRegistros((p) => p.filter((x) => x.id !== item.id));
+  }
+
+  // ---- Contrato: critérios de reajuste (cards clicáveis) ----
+  const [criteriosAbertos, setCriteriosAbertos] = useState<Record<string, boolean>>({});
+  function alternarCriterioAberto(key: string) {
+    setCriteriosAbertos((p) => ({ ...p, [key]: !p[key] }));
+  }
+
+  const npsMedias = listaPesquisas
+    .map((p) => calcularRelatorioNps(p))
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .map((r) => r.npsScore);
+  const npsMedio = npsMedias.length > 0 ? Math.round(npsMedias.reduce((a, b) => a + b, 0) / npsMedias.length) : null;
+
+  const scorecardPercentuais = listaScorecardAvaliacoes.map((av) => calcularScorecard(av).percentual);
+  const scorecardMedio =
+    scorecardPercentuais.length > 0
+      ? Math.round((scorecardPercentuais.reduce((a, b) => a + b, 0) / scorecardPercentuais.length) * 10) / 10
+      : null;
+
+  const cursosTotal = listaCursos.length;
+  const cursosOk = listaCursos.filter((c) => c.status === "ok").length;
+
+  const atividadesFeitas = contratoAtivo?.atividades_extras_feitas ?? 0;
+  const atividadesMeta = contratoAtivo?.atividades_extras_meta ?? 2;
+
+  const criterios: {
+    key: string;
+    nome: string;
+    meta: string;
+    valorAtual: string;
+    status: "ok" | "pendente" | "nao_atingido";
+    detalhe: string;
+  }[] = [
+    {
+      key: "nps",
+      nome: "NPS médio",
+      meta: `Meta: média ≥ ${CONTRATO_META_NPS}`,
+      valorAtual: npsMedio === null ? "—" : String(npsMedio),
+      status: npsMedio === null ? "nao_atingido" : npsMedio >= CONTRATO_META_NPS ? "ok" : "pendente",
+      detalhe:
+        npsMedio === null
+          ? "Ainda não há pesquisas de NPS com respostas para calcular a média."
+          : `Média calculada a partir de ${npsMedias.length} pesquisa(s) de NPS respondida(s), na aba NPS.`,
+    },
+    {
+      key: "scorecard",
+      nome: "ScoreCard médio",
+      meta: `Meta: média ≥ ${CONTRATO_META_SCORECARD}%`,
+      valorAtual: scorecardMedio === null ? "—" : `${scorecardMedio}%`,
+      status: scorecardMedio === null ? "nao_atingido" : scorecardMedio >= CONTRATO_META_SCORECARD ? "ok" : "pendente",
+      detalhe:
+        scorecardMedio === null
+          ? "Ainda não há avaliações de ScoreCard para calcular a média."
+          : `Média calculada a partir de ${scorecardPercentuais.length} avaliação(ões) de ScoreCard, na aba ScoreCard.`,
+    },
+    {
+      key: "atividades",
+      nome: "Atividades extras",
+      meta: `Meta: participar de ao menos ${atividadesMeta} atividade(s) não obrigatória(s)`,
+      valorAtual: `${atividadesFeitas} de ${atividadesMeta}`,
+      status: atividadesFeitas >= atividadesMeta ? "ok" : atividadesFeitas > 0 ? "pendente" : "nao_atingido",
+      detalhe: "Clique em \"editar\" abaixo do card para atualizar quantas atividades extras já foram feitas e a meta do período.",
+    },
+    {
+      key: "cursos",
+      nome: "Cursos concluídos",
+      meta: "Meta: concluir todos os cursos solicitados",
+      valorAtual: cursosTotal === 0 ? "—" : `${cursosOk} de ${cursosTotal}`,
+      status: cursosTotal === 0 ? "nao_atingido" : cursosOk === cursosTotal ? "ok" : "pendente",
+      detalhe:
+        cursosTotal === 0
+          ? "Nenhum curso cadastrado ainda na aba Cursos."
+          : `${cursosOk} de ${cursosTotal} curso(s) cadastrado(s) na aba Cursos estão marcados como OK.`,
+    },
+  ];
+
+  const criteriosAtingidos = criterios.filter((c) => c.status === "ok").length;
+
+  // ---- Contrato: férias — ciclo calculado a partir do início do contrato ----
+  let feriasInfo: {
+    inicioPeriodo: string;
+    vencimento: string;
+    prazoConceder: string;
+    diasParaVencer: number;
+    diasDireito: number;
+    diasTirados: number;
+    diasSaldo: number;
+  } | null = null;
+
+  if (contratoAtivo?.data_inicio) {
+    let inicioPeriodo = contratoAtivo.data_inicio;
+    let vencimento = addMeses(inicioPeriodo, 12);
+    // avança ciclos de 12 meses já vencidos até achar o período vigente
+    while (vencimento < hoje) {
+      inicioPeriodo = vencimento;
+      vencimento = addMeses(inicioPeriodo, 12);
+    }
+    const prazoConceder = addMeses(vencimento, 12);
+    const diasDireito = 30;
+    const diasTirados = listaFeriasRegistros
+      .filter((r) => r.data_inicio >= inicioPeriodo && r.data_inicio < vencimento)
+      .reduce((acc, r) => acc + r.dias, 0);
+    feriasInfo = {
+      inicioPeriodo,
+      vencimento,
+      prazoConceder,
+      diasParaVencer: diasEntre(hoje, vencimento),
+      diasDireito,
+      diasTirados,
+      diasSaldo: diasDireito - diasTirados,
+    };
   }
 
   return (
@@ -1526,16 +1771,339 @@ export default function TreinadorDashboard({
         )}
 
         {aba === "Contrato" && (
-          <Lista
-            vazio="Nenhum contrato cadastrado ainda."
-            itens={listaContratos.map((c) => ({
-              id: c.id,
-              titulo: c.tipo_contrato || "Contrato",
-              corpo: [c.data_inicio ? `Início: ${fmtDate(c.data_inicio)}` : "", c.data_renovacao ? `Renovação: ${fmtDate(c.data_renovacao)}` : "", c.observacoes || ""]
-                .filter(Boolean)
-                .join(" · "),
-            }))}
-          />
+          !contratoAtivo ? (
+            <p style={{ color: "#9a9a9f", textAlign: "center", padding: 20 }}>
+              Nenhum contrato cadastrado ainda. Clique em "+ Adicionar" acima para começar.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Dados do contrato */}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#ff6a00", fontWeight: 700, marginBottom: 12 }}>
+                  Dados do contrato
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+                  <div style={{ flex: "1 1 140px" }}>
+                    <label style={{ display: "block", fontSize: 11, color: "#9a9a9f", marginBottom: 4 }}>Tipo</label>
+                    <input
+                      defaultValue={contratoAtivo.tipo_contrato || ""}
+                      onBlur={(e) => atualizarContratoAtivo("tipo_contrato", e.target.value)}
+                      style={inputStyle}
+                      placeholder="Ex: CLT, PJ, Freelancer"
+                    />
+                  </div>
+                  <div style={{ flex: "1 1 140px" }}>
+                    <label style={{ display: "block", fontSize: 11, color: "#9a9a9f", marginBottom: 4 }}>Início</label>
+                    <input
+                      type="date"
+                      defaultValue={contratoAtivo.data_inicio || ""}
+                      onChange={(e) => atualizarContratoAtivo("data_inicio", e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div style={{ flex: "1 1 140px" }}>
+                    <label style={{ display: "block", fontSize: 11, color: "#9a9a9f", marginBottom: 4 }}>Próxima renovação</label>
+                    <input
+                      type="date"
+                      defaultValue={contratoAtivo.data_renovacao || ""}
+                      onChange={(e) => atualizarContratoAtivo("data_renovacao", e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <label style={{ display: "block", fontSize: 11, color: "#9a9a9f", marginBottom: 4 }}>Observações</label>
+                  <textarea
+                    defaultValue={contratoAtivo.observacoes || ""}
+                    onBlur={(e) => atualizarContratoAtivo("observacoes", e.target.value)}
+                    style={{ ...inputStyle, minHeight: 60 }}
+                  />
+                </div>
+              </div>
+
+              {/* Valor da hora aula */}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#ff6a00", fontWeight: 700, marginBottom: 12 }}>
+                  Valor da hora aula
+                </div>
+                <div style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: "#9a9a9f", marginBottom: 2 }}>Valor combinado atual</div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                        <span className="font-extrabold" style={{ fontSize: 24, color: "#ff6a00" }}>
+                          {listaValoresHora.length === 0 ? "—" : `R$ ${listaValoresHora[0].valor.toFixed(2).replace(".", ",")}`}
+                        </span>
+                        {listaValoresHora.length > 0 && (
+                          <span style={{ fontSize: 12, color: "#9a9a9f" }}>vigente desde {fmtDate(listaValoresHora[0].vigente_desde)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={abrirModalValorHora}
+                      className="font-bold"
+                      style={{ background: "rgba(255,106,0,0.14)", color: "#ff6a00", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}
+                    >
+                      + Atualizar valor
+                    </button>
+                  </div>
+
+                  {listaValoresHora.length > 1 && (
+                    <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ fontSize: 12, color: "#d8d8d8", fontWeight: 700, marginBottom: 2 }}>Histórico de alterações</div>
+                      {listaValoresHora.slice(1).map((h, i) => {
+                        const anterior = listaValoresHora[i];
+                        return (
+                          <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, flexWrap: "wrap" }}>
+                            <span style={{ color: "#9a9a9f", textDecoration: "line-through" }}>R$ {h.valor.toFixed(2).replace(".", ",")}</span>
+                            <span style={{ color: "#6a6a6a" }}>→</span>
+                            <span style={{ color: "#f2f2f0" }}>R$ {anterior.valor.toFixed(2).replace(".", ",")}</span>
+                            <span style={{ color: "#9a9a9f", marginLeft: "auto", fontSize: 12 }}>trocou em {fmtDate(anterior.vigente_desde)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Resumo geral do reajuste */}
+              <div
+                style={{
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 10,
+                  padding: 16,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 11, color: "#9a9a9f", marginBottom: 2 }}>Reajuste salarial</div>
+                  <div className="font-bold" style={{ fontSize: 16 }}>
+                    {criteriosAtingidos === criterios.length ? "Todos os critérios atingidos" : "Ainda faltam critérios para o reajuste"}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    background: criteriosAtingidos === criterios.length ? "rgba(31,191,92,0.14)" : "rgba(255,106,0,0.14)",
+                    borderRadius: 999,
+                    padding: "8px 16px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: "50%",
+                      background: criteriosAtingidos === criterios.length ? "#1fbf5c" : "#ff6a00",
+                    }}
+                  />
+                  <span
+                    className="font-bold"
+                    style={{ fontSize: 13, color: criteriosAtingidos === criterios.length ? "#1fbf5c" : "#ff6a00" }}
+                  >
+                    {criteriosAtingidos} de {criterios.length} atingidos
+                  </span>
+                </div>
+              </div>
+
+              {/* Critérios de reajuste */}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#ff6a00", fontWeight: 700, marginBottom: 12 }}>
+                  Critérios de reajuste · clique para ver o detalhe
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+                  {criterios.map((c) => {
+                    const estilo = corStatusCriterio(c.status);
+                    const aberto = !!criteriosAbertos[c.key];
+                    return (
+                      <div
+                        key={c.key}
+                        onClick={() => alternarCriterioAberto(c.key)}
+                        style={{
+                          cursor: "pointer",
+                          border: `1px solid ${aberto ? "#ff6a00" : "rgba(255,255,255,0.08)"}`,
+                          borderRadius: 10,
+                          padding: 14,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 10,
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                          <div>
+                            <div className="font-bold" style={{ fontSize: 14 }}>{c.nome}</div>
+                            <div style={{ fontSize: 12, color: "#9a9a9f" }}>{c.meta}</div>
+                          </div>
+                          <span
+                            className="font-extrabold"
+                            style={{ fontSize: 11, color: estilo.cor, background: estilo.fundo, borderRadius: 999, padding: "4px 10px", whiteSpace: "nowrap" }}
+                          >
+                            {estilo.label}
+                          </span>
+                        </div>
+                        <div className="font-extrabold" style={{ fontSize: 22, color: estilo.cor }}>{c.valorAtual}</div>
+                        {aberto && (
+                          <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8, fontSize: 12.5, color: "#b5b5b5", lineHeight: 1.5 }}>
+                            {c.detalhe}
+                            {c.key === "atividades" && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}
+                              >
+                                <div>
+                                  <label style={{ display: "block", fontSize: 10, color: "#9a9a9f" }}>Feitas</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    defaultValue={atividadesFeitas}
+                                    onBlur={(e) => atualizarAtividadesExtras("atividades_extras_feitas", parseInt(e.target.value, 10))}
+                                    style={{ ...inputStyle, width: 70, padding: 6 }}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={{ display: "block", fontSize: 10, color: "#9a9a9f" }}>Meta</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    defaultValue={atividadesMeta}
+                                    onBlur={(e) => atualizarAtividadesExtras("atividades_extras_meta", parseInt(e.target.value, 10))}
+                                    style={{ ...inputStyle, width: 70, padding: 6 }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Férias */}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#ff6a00", fontWeight: 700, marginBottom: 12 }}>
+                  Férias
+                </div>
+                {!feriasInfo ? (
+                  <p style={{ color: "#9a9a9f", fontSize: 13 }}>
+                    Preencha a data de início do contrato acima para calcular o ciclo de férias automaticamente.
+                  </p>
+                ) : (
+                  <div style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-end" }}>
+                      <div style={{ flex: "1 1 130px" }}>
+                        <div style={{ fontSize: 11, color: "#9a9a9f", marginBottom: 2 }}>Início do período atual</div>
+                        <div className="font-bold" style={{ fontSize: 15 }}>{fmtDate(feriasInfo.inicioPeriodo)}</div>
+                      </div>
+                      <div style={{ flex: "1 1 130px" }}>
+                        <div style={{ fontSize: 11, color: "#9a9a9f", marginBottom: 2 }}>Vencimento</div>
+                        <div className="font-bold" style={{ fontSize: 15 }}>{fmtDate(feriasInfo.vencimento)}</div>
+                      </div>
+                      <div style={{ flex: "1 1 130px" }}>
+                        <div style={{ fontSize: 11, color: "#9a9a9f", marginBottom: 2 }}>Prazo final para conceder</div>
+                        <div className="font-bold" style={{ fontSize: 15 }}>{fmtDate(feriasInfo.prazoConceder)}</div>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          background:
+                            feriasInfo.diasParaVencer <= 30 ? "rgba(229,72,77,0.14)" : feriasInfo.diasParaVencer <= 90 ? "rgba(255,106,0,0.14)" : "rgba(31,191,92,0.14)",
+                          borderRadius: 999,
+                          padding: "7px 14px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 9,
+                            height: 9,
+                            borderRadius: "50%",
+                            background: feriasInfo.diasParaVencer <= 30 ? "#e5484d" : feriasInfo.diasParaVencer <= 90 ? "#ff6a00" : "#1fbf5c",
+                          }}
+                        />
+                        <span
+                          className="font-bold"
+                          style={{
+                            fontSize: 12,
+                            color: feriasInfo.diasParaVencer <= 30 ? "#e5484d" : feriasInfo.diasParaVencer <= 90 ? "#ff6a00" : "#1fbf5c",
+                          }}
+                        >
+                          {feriasInfo.diasParaVencer <= 30 ? "Vencendo — agendar" : feriasInfo.diasParaVencer <= 90 ? "Atenção ao prazo" : "Dentro do prazo"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 20, borderTop: "1px solid rgba(255,255,255,0.08)", borderBottom: "1px solid rgba(255,255,255,0.08)", padding: "12px 0", flexWrap: "wrap" }}>
+                      <div style={{ flex: "1 1 100px" }}>
+                        <div style={{ fontSize: 11, color: "#9a9a9f" }}>Direito no período</div>
+                        <div className="font-extrabold" style={{ fontSize: 20 }}>{feriasInfo.diasDireito} dias</div>
+                      </div>
+                      <div style={{ flex: "1 1 100px" }}>
+                        <div style={{ fontSize: 11, color: "#9a9a9f" }}>Já tirados</div>
+                        <div className="font-extrabold" style={{ fontSize: 20 }}>{feriasInfo.diasTirados} dias</div>
+                      </div>
+                      <div style={{ flex: "1 1 100px" }}>
+                        <div style={{ fontSize: 11, color: "#9a9a9f" }}>Saldo restante</div>
+                        <div
+                          className="font-extrabold"
+                          style={{ fontSize: 20, color: feriasInfo.diasSaldo <= 5 ? "#e5484d" : feriasInfo.diasSaldo <= 15 ? "#ff6a00" : "#1fbf5c" }}
+                        >
+                          {feriasInfo.diasSaldo} dias
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span className="font-bold" style={{ fontSize: 13 }}>Registros de férias</span>
+                        <button
+                          onClick={abrirModalFerias}
+                          className="font-bold"
+                          style={{ background: "rgba(255,106,0,0.14)", color: "#ff6a00", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 12.5, cursor: "pointer" }}
+                        >
+                          + Registrar férias
+                        </button>
+                      </div>
+                      {listaFeriasRegistros.length === 0 ? (
+                        <p style={{ color: "#9a9a9f", fontSize: 13 }}>Nenhum registro ainda.</p>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {listaFeriasRegistros.map((r) => (
+                            <div
+                              key={r.id}
+                              style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "8px 12px", flexWrap: "wrap" }}
+                            >
+                              <span style={{ fontSize: 13 }}>{fmtDate(r.data_inicio)} → {fmtDate(r.data_fim)}</span>
+                              <span style={{ fontSize: 12, color: "#9a9a9f" }}>{r.dias} dias corridos</span>
+                              <button
+                                onClick={() => apagarFeriasRegistro(r)}
+                                title="Apagar"
+                                style={{ marginLeft: "auto", color: "#ff5a5a", background: "transparent", border: "none", fontSize: 14, cursor: "pointer" }}
+                              >
+                                🗑
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p style={{ fontSize: 11, color: "#6a6a6a", marginTop: 8 }}>
+                        Ao registrar um período, os dias corridos entram automaticamente no cálculo do saldo acima.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
         )}
       </div>
 
@@ -1913,6 +2481,65 @@ export default function TreinadorDashboard({
               style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8, marginTop: 8 }}
             >
               {salvandoScorecard ? "Salvando..." : editandoScorecardId ? "Salvar edição" : "Salvar ScoreCard"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showValorHoraModal && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }}
+          onClick={() => setShowValorHoraModal(false)}
+        >
+          <div className="card" style={{ padding: 24, width: 360, maxWidth: "100%" }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-extrabold mb-3">Atualizar valor da hora aula</h3>
+            <Campo label="Novo valor (R$)">
+              <input
+                value={vhValor}
+                onChange={(e) => setVhValor(e.target.value)}
+                style={inputStyle}
+                placeholder="Ex: 65,00"
+                inputMode="decimal"
+              />
+            </Campo>
+            <Campo label="A partir de">
+              <input type="date" value={vhData} onChange={(e) => setVhData(e.target.value)} style={inputStyle} />
+            </Campo>
+            <p style={{ fontSize: 11, color: "#6a6a6a", marginBottom: 10 }}>
+              O valor atual vira automaticamente um registro no histórico — nada é apagado.
+            </p>
+            <button
+              onClick={salvarValorHora}
+              disabled={salvandoVH}
+              className="font-bold"
+              style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8 }}
+            >
+              {salvandoVH ? "Salvando..." : "Salvar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showFeriasModal && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }}
+          onClick={() => setShowFeriasModal(false)}
+        >
+          <div className="card" style={{ padding: 24, width: 360, maxWidth: "100%" }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-extrabold mb-3">Registrar férias</h3>
+            <Campo label="Data início">
+              <input type="date" value={frInicio} onChange={(e) => setFrInicio(e.target.value)} style={inputStyle} />
+            </Campo>
+            <Campo label="Data fim">
+              <input type="date" value={frFim} onChange={(e) => setFrFim(e.target.value)} style={inputStyle} />
+            </Campo>
+            <button
+              onClick={salvarFerias}
+              disabled={salvandoFerias}
+              className="font-bold"
+              style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8, marginTop: 6 }}
+            >
+              {salvandoFerias ? "Salvando..." : "Salvar"}
             </button>
           </div>
         </div>
