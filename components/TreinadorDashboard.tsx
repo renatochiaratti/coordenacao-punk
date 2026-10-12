@@ -16,6 +16,7 @@ import type {
   NpsResposta,
   ValorHora,
   FeriasRegistro,
+  ContratoAdicional,
 } from "@/lib/types";
 
 const PERGUNTAS_AVALIACAO = [
@@ -334,6 +335,7 @@ export default function TreinadorDashboard({
   scorecardAvaliacoes,
   valoresHora,
   feriasRegistros,
+  contratoAdicionais,
 }: {
   treinador: Treinador;
   oneOnOnes: OneOnOne[];
@@ -346,6 +348,7 @@ export default function TreinadorDashboard({
   npsPesquisas: (NpsPesquisa & { nps_respostas: NpsResposta[] })[];
   valoresHora: ValorHora[];
   feriasRegistros: FeriasRegistro[];
+  contratoAdicionais: ContratoAdicional[];
 }) {
   const [aba, setAba] = useState<(typeof ABAS)[number]>("One-on-One");
   const [showModal, setShowModal] = useState(false);
@@ -360,6 +363,7 @@ export default function TreinadorDashboard({
   const [listaPesquisas, setListaPesquisas] = useState(npsPesquisas);
   const [listaValoresHora, setListaValoresHora] = useState(valoresHora);
   const [listaFeriasRegistros, setListaFeriasRegistros] = useState(feriasRegistros);
+  const [listaContratoAdicionais, setListaContratoAdicionais] = useState(contratoAdicionais);
   const [linkCopiadoId, setLinkCopiadoId] = useState<string | null>(null);
 
   const hoje = new Date().toISOString().slice(0, 10);
@@ -790,6 +794,12 @@ export default function TreinadorDashboard({
     await supabase.from("contratos").update({ [campo]: v }).eq("id", contratoAtivo.id);
   }
 
+  async function atualizarAtividadesExtrasAnotacao(valor: string) {
+    if (!contratoAtivo) return;
+    setListaContratos((p) => p.map((x) => (x.id === contratoAtivo.id ? { ...x, atividades_extras_anotacao: valor || null } : x)));
+    await supabase.from("contratos").update({ atividades_extras_anotacao: valor || null }).eq("id", contratoAtivo.id);
+  }
+
   // ---- Contrato: valor da hora aula, com histórico ----
   const [showValorHoraModal, setShowValorHoraModal] = useState(false);
   const [vhValor, setVhValor] = useState("");
@@ -826,6 +836,47 @@ export default function TreinadorDashboard({
       setShowValorHoraModal(false);
     } finally {
       setSalvandoVH(false);
+    }
+  }
+
+  // ---- Contrato: adicional (valor extra opcional, com motivo e histórico) ----
+  const [showAdicionalModal, setShowAdicionalModal] = useState(false);
+  const [adValor, setAdValor] = useState("");
+  const [adData, setAdData] = useState(hoje);
+  const [adMotivo, setAdMotivo] = useState("");
+  const [salvandoAd, setSalvandoAd] = useState(false);
+
+  function abrirModalAdicional() {
+    setAdValor("");
+    setAdData(hoje);
+    setAdMotivo("");
+    setShowAdicionalModal(true);
+  }
+
+  async function salvarAdicional() {
+    const valorNum = parseFloat(adValor.replace(",", "."));
+    if (!valorNum || valorNum <= 0) {
+      alert("Informe um valor válido para o adicional.");
+      return;
+    }
+    if (!treinador.id) return;
+    setSalvandoAd(true);
+    try {
+      const { data, error } = await supabase
+        .from("contrato_adicionais")
+        .insert({ treinador_id: treinador.id, valor: valorNum, motivo: adMotivo || null, vigente_desde: adData })
+        .select()
+        .single();
+      if (error) {
+        alert("Não foi possível salvar o adicional: " + error.message);
+        return;
+      }
+      if (data) {
+        setListaContratoAdicionais((p) => [data as ContratoAdicional, ...p].sort((a, b) => (a.vigente_desde < b.vigente_desde ? 1 : -1)));
+      }
+      setShowAdicionalModal(false);
+    } finally {
+      setSalvandoAd(false);
     }
   }
 
@@ -929,11 +980,11 @@ export default function TreinadorDashboard({
     },
     {
       key: "atividades",
-      nome: "Atividades extras",
-      meta: `Meta: participar de ao menos ${atividadesMeta} atividade(s) não obrigatória(s)`,
+      nome: "Atividades extras e contribuição genuína",
+      meta: `Meta: participar de ao menos ${atividadesMeta} atividade(s) não obrigatória(s) e contribuir de forma genuína com a equipe`,
       valorAtual: `${atividadesFeitas} de ${atividadesMeta}`,
       status: atividadesFeitas >= atividadesMeta ? "ok" : atividadesFeitas > 0 ? "pendente" : "nao_atingido",
-      detalhe: "Clique em \"editar\" abaixo do card para atualizar quantas atividades extras já foram feitas e a meta do período.",
+      detalhe: "Clique em \"editar\" abaixo do card para atualizar quantas atividades extras já foram feitas e a meta do período. A contribuição genuína não tem número — é a anotação livre logo abaixo.",
     },
     {
       key: "cursos",
@@ -1867,6 +1918,50 @@ export default function TreinadorDashboard({
                 </div>
               </div>
 
+              {/* Adicional (valor extra opcional, somado ao valor da hora) */}
+              <div>
+                <div style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: "#9a9a9f", marginBottom: 2 }}>Adicional vigente</div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                        <span className="font-extrabold" style={{ fontSize: 20, color: "#ff6a00" }}>
+                          {listaContratoAdicionais.length === 0 ? "—" : `R$ ${listaContratoAdicionais[0].valor.toFixed(2).replace(".", ",")}`}
+                        </span>
+                        {listaContratoAdicionais.length > 0 && (
+                          <span style={{ fontSize: 12, color: "#9a9a9f" }}>desde {fmtDate(listaContratoAdicionais[0].vigente_desde)}</span>
+                        )}
+                      </div>
+                      {listaContratoAdicionais.length > 0 && listaContratoAdicionais[0].motivo && (
+                        <div style={{ fontSize: 13, color: "#b5b5b5", marginTop: 4, maxWidth: 480 }}>{listaContratoAdicionais[0].motivo}</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={abrirModalAdicional}
+                      className="font-bold"
+                      style={{ background: "rgba(255,106,0,0.14)", color: "#ff6a00", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}
+                    >
+                      + Adicional
+                    </button>
+                  </div>
+
+                  {listaContratoAdicionais.length > 1 && (
+                    <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ fontSize: 12, color: "#d8d8d8", fontWeight: 700, marginBottom: 2 }}>Histórico de adicionais</div>
+                      {listaContratoAdicionais.slice(1).map((a) => (
+                        <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 13 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                            <span style={{ color: "#f2f2f0", fontWeight: 600 }}>R$ {a.valor.toFixed(2).replace(".", ",")}</span>
+                            <span style={{ color: "#9a9a9f", marginLeft: "auto", fontSize: 12 }}>a partir de {fmtDate(a.vigente_desde)}</span>
+                          </div>
+                          {a.motivo && <div style={{ color: "#9a9a9f", fontSize: 12.5 }}>{a.motivo}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Resumo geral do reajuste */}
               <div
                 style={{
@@ -1953,28 +2048,38 @@ export default function TreinadorDashboard({
                           <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8, fontSize: 12.5, color: "#b5b5b5", lineHeight: 1.5 }}>
                             {c.detalhe}
                             {c.key === "atividades" && (
-                              <div
-                                onClick={(e) => e.stopPropagation()}
-                                style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}
-                              >
-                                <div>
-                                  <label style={{ display: "block", fontSize: 10, color: "#9a9a9f" }}>Feitas</label>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    defaultValue={atividadesFeitas}
-                                    onBlur={(e) => atualizarAtividadesExtras("atividades_extras_feitas", parseInt(e.target.value, 10))}
-                                    style={{ ...inputStyle, width: 70, padding: 6 }}
-                                  />
+                              <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
+                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                  <div>
+                                    <label style={{ display: "block", fontSize: 10, color: "#9a9a9f" }}>Feitas</label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      defaultValue={atividadesFeitas}
+                                      onBlur={(e) => atualizarAtividadesExtras("atividades_extras_feitas", parseInt(e.target.value, 10))}
+                                      style={{ ...inputStyle, width: 70, padding: 6 }}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label style={{ display: "block", fontSize: 10, color: "#9a9a9f" }}>Meta</label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      defaultValue={atividadesMeta}
+                                      onBlur={(e) => atualizarAtividadesExtras("atividades_extras_meta", parseInt(e.target.value, 10))}
+                                      style={{ ...inputStyle, width: 70, padding: 6 }}
+                                    />
+                                  </div>
                                 </div>
                                 <div>
-                                  <label style={{ display: "block", fontSize: 10, color: "#9a9a9f" }}>Meta</label>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    defaultValue={atividadesMeta}
-                                    onBlur={(e) => atualizarAtividadesExtras("atividades_extras_meta", parseInt(e.target.value, 10))}
-                                    style={{ ...inputStyle, width: 70, padding: 6 }}
+                                  <label style={{ display: "block", fontSize: 10, color: "#9a9a9f", marginBottom: 4 }}>
+                                    O que foi feito / o que ficou de fora neste período
+                                  </label>
+                                  <textarea
+                                    defaultValue={contratoAtivo?.atividades_extras_anotacao || ""}
+                                    onBlur={(e) => atualizarAtividadesExtrasAnotacao(e.target.value)}
+                                    style={{ ...inputStyle, minHeight: 70, fontSize: 12.5 }}
+                                    placeholder="Ex: ajudou um colega novo na adaptação, mas não se envolveu nos eventos externos do box."
                                   />
                                 </div>
                               </div>
@@ -2515,6 +2620,48 @@ export default function TreinadorDashboard({
               style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8 }}
             >
               {salvandoVH ? "Salvando..." : "Salvar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showAdicionalModal && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }}
+          onClick={() => setShowAdicionalModal(false)}
+        >
+          <div className="card" style={{ padding: 24, width: 360, maxWidth: "100%" }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-extrabold mb-3">Novo adicional</h3>
+            <Campo label="Valor do adicional (R$)">
+              <input
+                value={adValor}
+                onChange={(e) => setAdValor(e.target.value)}
+                style={inputStyle}
+                placeholder="Ex: 150,00"
+                inputMode="decimal"
+              />
+            </Campo>
+            <Campo label="A partir de">
+              <input type="date" value={adData} onChange={(e) => setAdData(e.target.value)} style={inputStyle} />
+            </Campo>
+            <Campo label="Motivo (breve)">
+              <textarea
+                value={adMotivo}
+                onChange={(e) => setAdMotivo(e.target.value)}
+                style={{ ...inputStyle, minHeight: 60 }}
+                placeholder="Ex: assumiu turma extra de sábado"
+              />
+            </Campo>
+            <p style={{ fontSize: 11, color: "#6a6a6a", marginBottom: 10 }}>
+              O adicional atual vira automaticamente um registro no histórico — nada é apagado.
+            </p>
+            <button
+              onClick={salvarAdicional}
+              disabled={salvandoAd}
+              className="font-bold"
+              style={{ width: "100%", background: "#ff6a00", color: "#0d0d0d", padding: 10, borderRadius: 8 }}
+            >
+              {salvandoAd ? "Salvando..." : "Salvar"}
             </button>
           </div>
         </div>
