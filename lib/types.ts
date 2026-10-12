@@ -106,12 +106,22 @@ export type Contrato = {
   observacoes: string | null;
   atividades_extras_feitas: number;
   atividades_extras_meta: number;
+  atividades_extras_anotacao: string | null;
 };
 
 export type ValorHora = {
   id: string;
   treinador_id: string;
   valor: number;
+  vigente_desde: string;
+  created_at: string;
+};
+
+export type ContratoAdicional = {
+  id: string;
+  treinador_id: string;
+  valor: number;
+  motivo: string | null;
   vigente_desde: string;
   created_at: string;
 };
