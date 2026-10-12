@@ -24,6 +24,7 @@ export default async function TreinadorPage({ params }: { params: { token: strin
     npsPesquisas,
     valoresHora,
     feriasRegistros,
+    contratoAdicionais,
   ] = await Promise.all([
     supabase.from("one_on_ones").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
     supabase.from("checklist_aulas").select("*").eq("treinador_id", treinador.id).order("data", { ascending: false }),
@@ -35,6 +36,7 @@ export default async function TreinadorPage({ params }: { params: { token: strin
     supabase.from("nps_pesquisas").select("*, nps_respostas(*)").eq("treinador_id", treinador.id).order("data", { ascending: false }),
     supabase.from("valores_hora").select("*").eq("treinador_id", treinador.id).order("vigente_desde", { ascending: false }),
     supabase.from("ferias_registros").select("*").eq("treinador_id", treinador.id).order("data_inicio", { ascending: false }),
+    supabase.from("contrato_adicionais").select("*").eq("treinador_id", treinador.id).order("vigente_desde", { ascending: false }),
   ]);
 
   return (
@@ -50,6 +52,7 @@ export default async function TreinadorPage({ params }: { params: { token: strin
       npsPesquisas={npsPesquisas.data || []}
       valoresHora={valoresHora.data || []}
       feriasRegistros={feriasRegistros.data || []}
+      contratoAdicionais={contratoAdicionais.data || []}
     />
   );
 }
