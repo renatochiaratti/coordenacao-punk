@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLICAS = ["/login", "/convite", "/nps"];
 
+type CookieParaSalvar = { name: string; value: string; options?: any };
+
 export async function middleware(request: NextRequest) {
   let resposta = NextResponse.next({ request });
 
@@ -14,7 +16,7 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(lista) {
+        setAll(lista: CookieParaSalvar[]) {
           lista.forEach(({ name, value }) => request.cookies.set(name, value));
           resposta = NextResponse.next({ request });
           lista.forEach(({ name, value, options }) =>
