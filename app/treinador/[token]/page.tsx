@@ -1,10 +1,15 @@
+import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { obterAcesso, podeVerUnidade } from "@/lib/acesso";
 import TreinadorDashboard from "@/components/TreinadorDashboard";
 import { notFound } from "next/navigation";
 
 export const revalidate = 0;
 
 export default async function TreinadorPage({ params }: { params: { token: string } }) {
+  const acesso = await obterAcesso();
+  if (!acesso) redirect("/login");
+
   const { data: treinador } = await supabase
     .from("treinadores")
     .select("*, unidades(id, nome)")
@@ -12,6 +17,7 @@ export default async function TreinadorPage({ params }: { params: { token: strin
     .single();
 
   if (!treinador) return notFound();
+  if (!podeVerUnidade(acesso, treinador.unidade_id)) redirect("/");
 
   const [
     oneOnOnes,
