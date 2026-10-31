@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+type CookieParaSalvar = { name: string; value: string; options?: any };
+
 export function criarClienteServidor() {
   const cookieStore = cookies();
 
@@ -12,7 +14,7 @@ export function criarClienteServidor() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(lista) {
+        setAll(lista: CookieParaSalvar[]) {
           try {
             lista.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
