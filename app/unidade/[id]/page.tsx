@@ -1,10 +1,16 @@
+import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { obterAcesso, podeVerUnidade } from "@/lib/acesso";
 import UnidadeDashboard from "@/components/UnidadeDashboard";
 import { notFound } from "next/navigation";
 
 export const revalidate = 0;
 
 export default async function UnidadePage({ params }: { params: { id: string } }) {
+  const acesso = await obterAcesso();
+  if (!acesso) redirect("/login");
+  if (!podeVerUnidade(acesso, params.id)) redirect("/");
+
   const { data: unidade } = await supabase.from("unidades").select("*").eq("id", params.id).single();
   if (!unidade) return notFound();
 
