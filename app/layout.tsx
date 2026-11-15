@@ -1,6 +1,7 @@
 import "./globals.css";
 import { obterAcesso } from "@/lib/acesso";
 import BarraAcesso from "@/components/BarraAcesso";
+import ProtecaoConteudo from "@/components/ProtecaoConteudo";
 
 export const metadata = {
   title: "Coordenação Punk CrossFit",
@@ -17,6 +18,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <BarraAcesso email={acesso.email} papel={acesso.papel} nivel={acesso.nivel} />
         )}
         {children}
+        {acesso && acesso.papel !== "master" && <ProtecaoConteudo email={acesso.email} />}
       </body>
     </html>
   );
