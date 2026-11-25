@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLICAS = ["/login", "/convite", "/nps"];
+const PUBLICAS = ["/login", "/convite", "/nps", "/calendario"];
 
 type CookieParaSalvar = { name: string; value: string; options?: any };
 
