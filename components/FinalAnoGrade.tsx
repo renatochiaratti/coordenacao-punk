@@ -1,5 +1,7 @@
 "use client";
 
+import { supabase } from "@/lib/supabaseClient";
+
 export type FinalAnoLinha = {
   id: string;
   unidade_id: string;
@@ -133,7 +135,7 @@ export default function FinalAnoGrade({
                     key={l.id}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "54px minmax(0, 1fr)",
+                      gridTemplateColumns: editavel ? "76px minmax(0, 1fr)" : "54px minmax(0, 1fr)",
                       gap: 8,
                       alignItems: "center",
                       padding: "5px 0",
@@ -141,7 +143,21 @@ export default function FinalAnoGrade({
                       marginTop: j === 2 || j === 4 ? 4 : 0,
                     }}
                   >
-                    <span style={{ fontSize: 14, fontWeight: 800, color: "#f2f2f0" }}>{l.horario}</span>
+                    {editavel ? (
+                      <input
+                        type="text"
+                        defaultValue={l.horario}
+                        onBlur={(e) => {
+                          const valor = e.target.value.trim();
+                          if (valor) {
+                            supabase.from("final_ano_horarios").update({ horario: valor }).eq("id", l.id);
+                          }
+                        }}
+                        style={{ ...campoStyle, fontWeight: 800, textAlign: "center", padding: 8 }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: 14, fontWeight: 800, color: "#f2f2f0" }}>{l.horario}</span>
+                    )}
                     {editavel ? (
                       <input
                         type="text"
