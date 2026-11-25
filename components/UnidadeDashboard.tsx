@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { Unidade, Treinador, EscalaHorario, CalendarioDia } from "@/lib/types";
+import FinalAnoGrade, { type FinalAnoLinha } from "@/components/FinalAnoGrade";
 
 const CORES: Record<string, string> = {
   vermelho: "#ef4444",
@@ -49,16 +50,21 @@ export default function UnidadeDashboard({
   horarios,
   dias,
   treinadores,
+  finalAno,
 }: {
   unidade: Unidade;
   horarios: EscalaHorario[];
   dias: CalendarioDia[];
   treinadores: Treinador[];
+  finalAno: FinalAnoLinha[];
 }) {
   const [secao, setSecao] = useState<Secao>("menu");
   const [listaHorarios, setListaHorarios] = useState(horarios);
   const [listaDias, setListaDias] = useState(dias);
   const [listaTreinadores, setListaTreinadores] = useState(treinadores);
+  const [listaFinalAno, setListaFinalAno] = useState(finalAno);
+  const [abaAnual, setAbaAnual] = useState<"calendario" | "final">("calendario");
+  const [linkCopiado, setLinkCopiado] = useState(false);
 
   const [editando, setEditando] = useState<Treinador | null>(null);
   const [editNome, setEditNome] = useState("");
@@ -84,6 +90,22 @@ export default function UnidadeDashboard({
     const cor = proximaCor(item.cor_feriado);
     setListaDias((prev) => prev.map((x) => (x.id === item.id ? { ...x, cor_feriado: cor } : x)));
     await supabase.from("calendario_dias").update({ cor_feriado: cor }).eq("id", item.id);
+  }
+
+  async function salvarFinalAno(id: string, valor: string) {
+    setListaFinalAno((prev) => prev.map((l) => (l.id === id ? { ...l, professores: valor } : l)));
+    await supabase.from("final_ano_horarios").update({ professores: valor }).eq("id", id);
+  }
+
+  async function copiarLinkPublico() {
+    const link = `${window.location.origin}/calendario/${unidade.id}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopiado(true);
+      setTimeout(() => setLinkCopiado(false), 2500);
+    } catch {
+      window.prompt("Copie o link abaixo:", link);
+    }
   }
 
   function abrirEdicao(t: Treinador) {
@@ -245,6 +267,61 @@ export default function UnidadeDashboard({
       )}
 
       {secao === "anual" && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {(
+            [
+              { id: "calendario", titulo: "Calendário" },
+              { id: "final", titulo: "Final do ano" },
+            ] as { id: "calendario" | "final"; titulo: string }[]
+          ).map((b) => (
+            <button
+              key={b.id}
+              onClick={() => setAbaAnual(b.id)}
+              className="font-bold"
+              style={{
+                padding: "8px 14px",
+                borderRadius: 999,
+                fontSize: 13,
+                cursor: "pointer",
+                border: abaAnual === b.id ? "1px solid #ff6a00" : "1px solid rgba(255,255,255,0.14)",
+                background: abaAnual === b.id ? "#ff6a00" : "transparent",
+                color: abaAnual === b.id ? "#0d0d0d" : "#f2f2f0",
+              }}
+            >
+              {b.titulo}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {secao === "anual" && abaAnual === "final" && (
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+            <div>
+              <h2 className="font-extrabold" style={{ color: "#ff6a00", fontSize: 15, marginBottom: 4 }}>Final do ano</h2>
+              <p style={{ color: "#9a9a9f", fontSize: 12 }}>21/12 a 03/01/2027 — digite o nome dos professores de cada horário</p>
+            </div>
+            <button
+              onClick={copiarLinkPublico}
+              className="font-bold"
+              style={{
+                background: "transparent",
+                border: "1px solid #ff6a00",
+                color: "#ff6a00",
+                padding: "8px 12px",
+                borderRadius: 8,
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              {linkCopiado ? "Link copiado!" : "Copiar link para os professores"}
+            </button>
+          </div>
+          <FinalAnoGrade linhas={listaFinalAno} editavel={true} onSalvar={salvarFinalAno} />
+        </div>
+      )}
+
+      {secao === "anual" && abaAnual === "calendario" && (
         <div className="card" style={{ padding: 20, overflowX: "auto" }}>
           <h2 className="font-extrabold" style={{ color: "#ff6a00", fontSize: 15, marginBottom: 4 }}>Calendário Anual</h2>
           <p style={{ color: "#9a9a9f", fontSize: 12, marginBottom: 16 }}>70 dias — dê 2 toques na célula pra colorir, 1 toque pra digitar</p>
