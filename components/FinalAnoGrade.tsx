@@ -82,6 +82,7 @@ export default function FinalAnoGrade({
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {dias.map((d, i) => {
         const info = infoDoDia(d.data, i);
+        const modo = d.linhas.length === 1 ? "fechado" : d.linhas.length <= 3 ? "grande" : "normal";
         return (
           <div key={d.data}>
             {(i === 0 || i === 7) && (
@@ -118,67 +119,131 @@ export default function FinalAnoGrade({
               </div>
 
               <div className="card" style={{ padding: "10px 12px" }}>
-                <p
-                  style={{
-                    color: "#6c6c72",
-                    fontSize: 10,
-                    fontWeight: 800,
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                    margin: "0 0 8px",
-                  }}
-                >
-                  Horários
-                </p>
-                {d.linhas.map((l, j) => (
-                  <div
-                    key={l.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: editavel ? "76px minmax(0, 1fr)" : "54px minmax(0, 1fr)",
-                      gap: 8,
-                      alignItems: "center",
-                      padding: "5px 0",
-                      borderTop: j === 2 || j === 4 ? "1px solid rgba(255,255,255,0.08)" : "none",
-                      marginTop: j === 2 || j === 4 ? 4 : 0,
-                    }}
-                  >
+                {modo === "fechado" && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 84 }}>
                     {editavel ? (
                       <input
                         type="text"
-                        defaultValue={l.horario}
-                        onBlur={(e) => {
-                          const valor = e.target.value.trim();
-                          if (valor) {
-                            supabase.from("final_ano_horarios").update({ horario: valor }).eq("id", l.id);
-                          }
-                        }}
-                        style={{ ...campoStyle, fontWeight: 800, textAlign: "center", padding: 8 }}
+                        defaultValue={d.linhas[0].professores}
+                        placeholder="Ex: Fechado"
+                        onBlur={(e) => onSalvar && onSalvar(d.linhas[0].id, e.target.value)}
+                        style={{ ...campoStyle, fontSize: 18, fontWeight: 800, textAlign: "center", padding: 14 }}
                       />
                     ) : (
-                      <span style={{ fontSize: 14, fontWeight: 800, color: "#f2f2f0" }}>{l.horario}</span>
-                    )}
-                    {editavel ? (
-                      <input
-                        type="text"
-                        defaultValue={l.professores}
-                        placeholder="Professor(es)"
-                        onBlur={(e) => onSalvar && onSalvar(l.id, e.target.value)}
-                        style={campoStyle}
-                      />
-                    ) : (
-                      <span
-                        style={{
-                          fontSize: 14,
-                          color: l.professores ? "#f2f2f0" : "#4a4a50",
-                          minHeight: 20,
-                        }}
-                      >
-                        {l.professores || "—"}
+                      <span className="font-extrabold" style={{ fontSize: 20, textAlign: "center", color: "#f2f2f0" }}>
+                        {d.linhas[0].professores || "—"}
                       </span>
                     )}
                   </div>
-                ))}
+                )}
+
+                {modo !== "fechado" && (
+                  <p
+                    style={{
+                      color: "#6c6c72",
+                      fontSize: 10,
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                      margin: "0 0 8px",
+                    }}
+                  >
+                    Horários
+                  </p>
+                )}
+
+                {modo === "grande" &&
+                  d.linhas.map((l, j) => (
+                    <div
+                      key={l.id}
+                      style={{
+                        padding: "10px 0",
+                        borderTop: j > 0 ? "1px solid rgba(255,255,255,0.08)" : "none",
+                      }}
+                    >
+                      {editavel ? (
+                        <input
+                          type="text"
+                          defaultValue={l.horario}
+                          onBlur={(e) => {
+                            const valor = e.target.value.trim();
+                            if (valor) {
+                              supabase.from("final_ano_horarios").update({ horario: valor }).eq("id", l.id);
+                            }
+                          }}
+                          style={{ ...campoStyle, fontWeight: 800, fontSize: 15, marginBottom: 8 }}
+                        />
+                      ) : (
+                        <p className="font-extrabold" style={{ fontSize: 16, margin: "0 0 6px", color: "#f2f2f0" }}>
+                          {l.horario}
+                        </p>
+                      )}
+                      {editavel ? (
+                        <input
+                          type="text"
+                          defaultValue={l.professores}
+                          placeholder="Professor(es)"
+                          onBlur={(e) => onSalvar && onSalvar(l.id, e.target.value)}
+                          style={{ ...campoStyle, padding: 12, fontSize: 14 }}
+                        />
+                      ) : (
+                        <p style={{ fontSize: 15, margin: 0, color: l.professores ? "#f2f2f0" : "#4a4a50" }}>
+                          {l.professores || "—"}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+
+                {modo === "normal" &&
+                  d.linhas.map((l, j) => (
+                    <div
+                      key={l.id}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: editavel ? "76px minmax(0, 1fr)" : "54px minmax(0, 1fr)",
+                        gap: 8,
+                        alignItems: "center",
+                        padding: "5px 0",
+                        borderTop: j === 2 || j === 4 ? "1px solid rgba(255,255,255,0.08)" : "none",
+                        marginTop: j === 2 || j === 4 ? 4 : 0,
+                      }}
+                    >
+                      {editavel ? (
+                        <input
+                          type="text"
+                          defaultValue={l.horario}
+                          onBlur={(e) => {
+                            const valor = e.target.value.trim();
+                            if (valor) {
+                              supabase.from("final_ano_horarios").update({ horario: valor }).eq("id", l.id);
+                            }
+                          }}
+                          style={{ ...campoStyle, fontWeight: 800, textAlign: "center", padding: 8 }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 14, fontWeight: 800, color: "#f2f2f0" }}>{l.horario}</span>
+                      )}
+                      {editavel ? (
+                        <input
+                          type="text"
+                          defaultValue={l.professores}
+                          placeholder="Professor(es)"
+                          onBlur={(e) => onSalvar && onSalvar(l.id, e.target.value)}
+                          style={campoStyle}
+                        />
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: 14,
+                            color: l.professores ? "#f2f2f0" : "#4a4a50",
+                            minHeight: 20,
+                          }}
+                        >
+                          {l.professores || "—"}
+                        </span>
+                      )}
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
